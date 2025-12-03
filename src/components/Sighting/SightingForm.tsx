@@ -33,7 +33,8 @@ export default function SightingForm({
 
   useEffect(() => {
     loadLocation()
-    if (photoBlob) {
+    // Only run AI identification if API key is available
+    if (photoBlob && import.meta.env.VITE_GEMINI_API_KEY) {
       identifyWithAI()
     }
   }, [])

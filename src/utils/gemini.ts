@@ -7,7 +7,13 @@ export async function identifySpecies(
   category: CategoryType
 ): Promise<AIIdentification> {
   if (!GEMINI_API_KEY) {
-    throw new Error('Gemini API key not configured')
+    // Return null if no API key - AI identification is optional
+    return {
+      species: null,
+      common_name: null,
+      confidence: 0,
+      description: 'AI identification not available (API key not configured)'
+    }
   }
 
   const base64Image = await blobToBase64(imageBlob)
