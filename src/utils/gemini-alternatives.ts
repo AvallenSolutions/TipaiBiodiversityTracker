@@ -66,7 +66,7 @@ If you cannot identify with confidence, provide your best guess with a lower con
 For traces (footprints, scat, scratch marks), identify what animal made it.`
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: {
