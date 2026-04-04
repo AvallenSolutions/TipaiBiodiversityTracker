@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './components/Auth/LoginPage'
 import Dashboard from './pages/Dashboard'
 import NewSighting from './pages/NewSighting'
+import SightingDetail from './pages/SightingDetail'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -47,6 +48,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <NewSighting />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sighting/:id"
+        element={
+          <ProtectedRoute>
+            <SightingDetail />
           </ProtectedRoute>
         }
       />

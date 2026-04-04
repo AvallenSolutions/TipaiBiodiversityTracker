@@ -103,11 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function guestSignIn(email: string) {
-    const tempPassword = `guest-${Date.now()}-${Math.random().toString(36)}`
-
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      password: tempPassword,
       options: {
         data: {
           full_name: email.split('@')[0],
@@ -116,12 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    if (signUpError) {
-      if (signUpError.message.includes('already registered')) {
-        throw new Error('This email is already registered. Please use the Staff login.')
-      }
-      throw signUpError
-    }
+    if (error) throw error
   }
 
   async function signOut() {
