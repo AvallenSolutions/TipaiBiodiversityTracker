@@ -1,4 +1,5 @@
-import { AIIdentification, CategoryType } from '../types/sighting'
+import { AIIdentification } from '../types/sighting'
+import { CategoryType } from '../types/database'
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 

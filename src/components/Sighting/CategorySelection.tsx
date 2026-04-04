@@ -1,4 +1,4 @@
-import { Cat, Bird, Radar, Bug, Leaf, Footprints, Mushroom } from 'lucide-react'
+import { Cat, Bird, Radar, Bug, Leaf, Footprints, Flower2 } from 'lucide-react'
 import { CategoryType } from '../../types/database'
 
 interface CategorySelectionProps {
@@ -12,7 +12,7 @@ const categories = [
   { type: 'insect' as CategoryType, icon: Bug, label: 'Insect', color: 'bg-purple-500' },
   { type: 'plant' as CategoryType, icon: Leaf, label: 'Plant', color: 'bg-emerald-500' },
   { type: 'trace' as CategoryType, icon: Footprints, label: 'Trace', color: 'bg-amber-600' },
-  { type: 'fungi' as CategoryType, icon: Mushroom, label: 'Fungi', color: 'bg-red-500' }
+  { type: 'fungi' as CategoryType, icon: Flower2, label: 'Fungi', color: 'bg-red-500' }
 ]
 
 export default function CategorySelection({ onSelect }: CategorySelectionProps) {

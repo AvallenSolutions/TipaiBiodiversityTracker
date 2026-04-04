@@ -5,10 +5,11 @@ import {
   deletePendingSighting,
   getMediaBlob
 } from '../lib/db'
-import { PendingSighting } from '../types/sighting'
+import { PendingSighting, AIIdentification } from '../types/sighting'
+import { CategoryType } from '../types/database'
 import { generateUniqueHash } from '../utils/crypto'
 
-export async function saveSightingOffline(sighting: Omit<PendingSighting, 'id' | 'unique_hash' | 'created_at'>) {
+export async function saveSightingOffline(sighting: Omit<PendingSighting, 'id' | 'unique_hash' | 'created_at'> & { ai_identification?: AIIdentification | null }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('User not authenticated')
 
@@ -30,6 +31,7 @@ export async function saveSightingOffline(sighting: Omit<PendingSighting, 'id' |
     photo_blob: sighting.photo_blob,
     audio_blob: sighting.audio_blob,
     notes: sighting.notes,
+    ai_identification: sighting.ai_identification || null,
     sighted_at: sighting.sighted_at,
     created_at: timestamp
   }
@@ -91,19 +93,23 @@ export async function syncPendingSightings(): Promise<{ synced: number; failed: 
         }
       }
 
-      const { error: insertError } = await supabase
-        .from('sightings')
+      const { error: insertError } = await (supabase
+        .from('sightings') as any)
         .insert({
           id: pending.id,
           unique_hash: pending.unique_hash,
           user_id: user.id,
           category: pending.category,
+          species_name: pending.ai_identification?.species || null,
+          common_name: pending.ai_identification?.common_name || null,
           latitude: pending.latitude,
           longitude: pending.longitude,
           location_accuracy: pending.location_accuracy,
           photo_url: photoUrl,
           audio_url: audioUrl,
           notes: pending.notes,
+          ai_identification: pending.ai_identification,
+          ai_confidence: pending.ai_identification?.confidence || null,
           sighted_at: pending.sighted_at,
           created_at: pending.created_at,
           synced: true
@@ -126,14 +132,14 @@ export async function syncPendingSightings(): Promise<{ synced: number; failed: 
 }
 
 export async function saveSightingOnline(
-  category: string,
+  category: CategoryType,
   latitude: number,
   longitude: number,
   locationAccuracy: number | null,
   photoBlob: Blob | null,
   audioBlob: Blob | null,
   notes: string | null,
-  aiIdentification: any | null,
+  aiIdentification: AIIdentification | null,
   sightedAt: string
 ) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -173,8 +179,8 @@ export async function saveSightingOnline(
     audioUrl = publicUrl
   }
 
-  const { error: insertError } = await supabase
-    .from('sightings')
+  const { error: insertError } = await (supabase
+    .from('sightings') as any)
     .insert({
       id,
       unique_hash: hash,

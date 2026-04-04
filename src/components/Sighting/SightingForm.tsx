@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MapPin, Loader, Check } from 'lucide-react'
 import { CategoryType } from '../../types/database'
 import { getCurrentLocation, formatCoordinates } from '../../utils/geolocation'
@@ -9,6 +9,8 @@ interface SightingFormProps {
   category: CategoryType
   photoBlob: Blob | null
   audioBlob: Blob | null
+  cachedAIIdentification: AIIdentification | null
+  onAIIdentification: (ai: AIIdentification) => void
   onSubmit: (data: {
     notes: string
     location: LocationData
@@ -21,6 +23,8 @@ export default function SightingForm({
   category,
   photoBlob,
   audioBlob,
+  cachedAIIdentification,
+  onAIIdentification,
   onSubmit,
   onBack
 }: SightingFormProps) {
@@ -28,13 +32,29 @@ export default function SightingForm({
   const [location, setLocation] = useState<LocationData | null>(null)
   const [loadingLocation, setLoadingLocation] = useState(true)
   const [loadingAI, setLoadingAI] = useState(false)
-  const [aiIdentification, setAiIdentification] = useState<AIIdentification | null>(null)
+  const [aiIdentification, setAiIdentification] = useState<AIIdentification | null>(cachedAIIdentification)
   const [submitting, setSubmitting] = useState(false)
+
+  const photoPreviewUrl = useMemo(() => {
+    if (!photoBlob) return null
+    return URL.createObjectURL(photoBlob)
+  }, [photoBlob])
+
+  const audioPreviewUrl = useMemo(() => {
+    if (!audioBlob) return null
+    return URL.createObjectURL(audioBlob)
+  }, [audioBlob])
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl)
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
+    }
+  }, [photoPreviewUrl, audioPreviewUrl])
 
   useEffect(() => {
     loadLocation()
-    // Only run AI identification if API key is available
-    if (photoBlob && import.meta.env.VITE_GEMINI_API_KEY) {
+    if (photoBlob && import.meta.env.VITE_GEMINI_API_KEY && !cachedAIIdentification) {
       identifyWithAI()
     }
   }, [])
@@ -57,6 +77,7 @@ export default function SightingForm({
     try {
       const identification = await identifySpecies(photoBlob, category)
       setAiIdentification(identification)
+      onAIIdentification(identification)
     } catch (error) {
       console.error('AI identification failed:', error)
     } finally {
@@ -163,26 +184,26 @@ export default function SightingForm({
           </div>
 
           {/* Preview Media */}
-          {photoBlob && (
+          {photoPreviewUrl && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Captured Photo
               </label>
               <img
-                src={URL.createObjectURL(photoBlob)}
+                src={photoPreviewUrl}
                 alt="Sighting"
                 className="w-full h-48 object-cover rounded-lg"
               />
             </div>
           )}
 
-          {audioBlob && (
+          {audioPreviewUrl && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Audio Recording
               </label>
               <audio
-                src={URL.createObjectURL(audioBlob)}
+                src={audioPreviewUrl}
                 controls
                 className="w-full"
               />

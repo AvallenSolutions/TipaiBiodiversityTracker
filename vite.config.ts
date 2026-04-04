@@ -16,6 +16,7 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
+        categories: ['education', 'utilities'],
         icons: [
           {
             src: 'pwa-192x192.png',

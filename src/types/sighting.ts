@@ -21,8 +21,8 @@ export interface Sighting {
 }
 
 export interface AIIdentification {
-  species?: string
-  common_name?: string
+  species?: string | null
+  common_name?: string | null
   confidence?: number
   description?: string
   suggested_category?: CategoryType
@@ -38,6 +38,7 @@ export interface PendingSighting {
   photo_blob: Blob | null
   audio_blob: Blob | null
   notes: string | null
+  ai_identification: AIIdentification | null
   sighted_at: string
   created_at: string
 }

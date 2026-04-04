@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       if (mode === 'guest') {
         await guestSignIn(email)
-        alert('Guest account created! Check your email to verify and start logging sightings.')
+        alert('A magic link has been sent to your email. Click it to log in and start logging sightings.')
       } else if (isSignUp) {
         const userRole = mode === 'naturalist' ? 'naturalist' : 'staff'
         await signUp(email, password, fullName, userRole)

@@ -15,6 +15,7 @@ export default function NewSighting() {
   const [category, setCategory] = useState<CategoryType | null>(null)
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null)
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [cachedAI, setCachedAI] = useState<AIIdentification | null>(null)
 
   function handleCategorySelect(selectedCategory: CategoryType) {
     setCategory(selectedCategory)
@@ -25,12 +26,21 @@ export default function NewSighting() {
     setStep('details')
   }
 
+  function handlePhotoCapture(blob: Blob) {
+    setPhotoBlob(blob)
+    setCachedAI(null)
+  }
+
   async function handleSubmit(data: {
     notes: string
     location: LocationData
     aiIdentification: AIIdentification | null
   }) {
     if (!category) return
+
+    if (data.aiIdentification) {
+      setCachedAI(data.aiIdentification)
+    }
 
     const sightedAt = new Date().toISOString()
 
@@ -57,6 +67,7 @@ export default function NewSighting() {
           photo_blob: photoBlob,
           audio_blob: audioBlob,
           notes: data.notes || null,
+          ai_identification: data.aiIdentification,
           sighted_at: sightedAt
         })
         alert('Sighting saved offline. It will sync when you are back online.')
@@ -76,7 +87,7 @@ export default function NewSighting() {
   if (step === 'media' && category) {
     return (
       <MediaCapture
-        onPhotoCapture={setPhotoBlob}
+        onPhotoCapture={handlePhotoCapture}
         onAudioCapture={setAudioBlob}
         onSkip={handleMediaComplete}
         initialPhoto={photoBlob}
@@ -91,6 +102,8 @@ export default function NewSighting() {
         category={category}
         photoBlob={photoBlob}
         audioBlob={audioBlob}
+        cachedAIIdentification={cachedAI}
+        onAIIdentification={setCachedAI}
         onSubmit={handleSubmit}
         onBack={() => setStep('media')}
       />
