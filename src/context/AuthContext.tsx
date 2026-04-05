@@ -1,29 +1,22 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
-import { UserRole } from '../types/database'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import type { User, Session } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
+import type { Profile, UserRole } from '@/types'
 
-interface Profile {
-  id: string
-  email: string
-  user_role: UserRole
-  full_name: string | null
-}
-
-interface AuthContextType {
+interface AuthState {
   user: User | null
   profile: Profile | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string, fullName: string, userRole: UserRole) => Promise<void>
+  signUp: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
+  signInAsGuest: (email: string) => Promise<void>
   signOut: () => Promise<void>
-  guestSignIn: (email: string) => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthState | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -40,9 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -65,54 +56,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single()
 
       if (error) throw error
-      setProfile(data)
-    } catch (error) {
-      console.error('Error loading profile:', error)
+      setProfile(data as Profile)
+    } catch (err) {
+      console.error('Failed to load profile:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  async function signUp(
-    email: string,
-    password: string,
-    fullName: string,
-    userRole: UserRole
-  ) {
+  async function signUp(email: string, password: string, displayName: string, role: UserRole) {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          full_name: fullName,
-          user_role: userRole
-        }
-      }
+        data: { display_name: displayName, role },
+      },
     })
-
     if (error) throw error
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
-
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
   }
 
-  async function guestSignIn(email: string) {
+  async function signInAsGuest(email: string) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        data: {
-          full_name: email.split('@')[0],
-          user_role: 'guest'
-        }
-      }
+        data: { display_name: email.split('@')[0], role: 'guest' },
+      },
     })
-
     if (error) throw error
   }
 
@@ -121,24 +95,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
-  const value = {
-    user,
-    profile,
-    session,
-    loading,
-    signUp,
-    signIn,
-    signOut,
-    guestSignIn
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, profile, session, loading, signUp, signIn, signInAsGuest, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
 }

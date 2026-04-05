@@ -1,75 +1,45 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
-import LoginPage from './components/Auth/LoginPage'
-import Dashboard from './pages/Dashboard'
-import NewSighting from './pages/NewSighting'
-import SightingDetail from './pages/SightingDetail'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth } from '@/context/AuthContext'
+import ProtectedRoute from '@/components/layout/ProtectedRoute'
+import AppShell from '@/components/layout/AppShell'
+import LoginPage from '@/pages/LoginPage'
+import SignUpPage from '@/pages/SignUpPage'
+import HomePage from '@/pages/HomePage'
+import NewSightingPage from '@/pages/NewSightingPage'
+import SightingDetailPage from '@/pages/SightingDetailPage'
+import SpeciesLibraryPage from '@/pages/SpeciesLibraryPage'
+import DashboardPage from '@/pages/DashboardPage'
+import AdminPage from '@/pages/AdminPage'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tipai-green-50 to-tipai-green-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-tipai-green-700 mx-auto mb-4"></div>
-          <p className="text-tipai-green-900 font-semibold">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  return <>{children}</>
-}
-
-function AppRoutes() {
+export default function App() {
   const { user } = useAuth()
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />}
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/new-sighting"
-        element={
-          <ProtectedRoute>
-            <NewSighting />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/sighting/:id"
-        element={
-          <ProtectedRoute>
-            <SightingDetail />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  )
-}
+      {/* Public routes */}
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+      <Route path="/signup" element={user ? <Navigate to="/" replace /> : <SignUpPage />} />
 
-export default function App() {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+      {/* Protected routes inside AppShell */}
+      <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+        <Route index element={<HomePage />} />
+        <Route path="new" element={<NewSightingPage />} />
+        <Route path="sighting/:id" element={<SightingDetailPage />} />
+        <Route path="species" element={<SpeciesLibraryPage />} />
+        <Route path="dashboard" element={
+          <ProtectedRoute roles={['naturalist', 'admin']}>
+            <DashboardPage />
+          </ProtectedRoute>
+        } />
+        <Route path="admin" element={
+          <ProtectedRoute roles={['admin']}>
+            <AdminPage />
+          </ProtectedRoute>
+        } />
+      </Route>
+
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
