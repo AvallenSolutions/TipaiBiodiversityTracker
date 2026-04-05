@@ -40,12 +40,6 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_my_role()
-RETURNS user_role LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public AS $$
-  SELECT role FROM public.profiles WHERE id = auth.uid();
-$$;
-
 -- 3. TABLES
 -- ============================================================
 
@@ -116,6 +110,13 @@ CREATE TABLE IF NOT EXISTS public.sighting_edits (
   edit_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- HELPER: get_my_role (must be after profiles table)
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS user_role LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$;
 
 -- 4. TRIGGERS
 -- ============================================================
