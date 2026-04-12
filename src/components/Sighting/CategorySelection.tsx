@@ -17,9 +17,9 @@ const categories = [
 
 export default function CategorySelection({ onSelect }: CategorySelectionProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 p-4">
       <div className="max-w-2xl mx-auto py-8">
-        <h1 className="text-3xl font-bold text-tipai-green-900 text-center mb-2">
+        <h1 className="font-heading text-3xl font-semibold text-tipai-green-900 text-center mb-2">
           New Sighting
         </h1>
         <p className="text-center text-gray-600 mb-8">

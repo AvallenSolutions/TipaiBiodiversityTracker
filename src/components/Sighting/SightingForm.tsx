@@ -17,6 +17,7 @@ interface SightingFormProps {
     aiIdentification: AIIdentification | null
   }) => void
   onBack: () => void
+  externalError?: string
 }
 
 export default function SightingForm({
@@ -26,11 +27,13 @@ export default function SightingForm({
   cachedAIIdentification,
   onAIIdentification,
   onSubmit,
-  onBack
+  onBack,
+  externalError
 }: SightingFormProps) {
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState<LocationData | null>(null)
   const [loadingLocation, setLoadingLocation] = useState(true)
+  const [locationError, setLocationError] = useState('')
   const [loadingAI, setLoadingAI] = useState(false)
   const [aiIdentification, setAiIdentification] = useState<AIIdentification | null>(cachedAIIdentification)
   const [submitting, setSubmitting] = useState(false)
@@ -64,7 +67,7 @@ export default function SightingForm({
       const loc = await getCurrentLocation()
       setLocation(loc)
     } catch (error: any) {
-      alert(`Could not get location: ${error.message}`)
+      setLocationError(`Could not get location: ${error.message}`)
     } finally {
       setLoadingLocation(false)
     }
@@ -87,10 +90,7 @@ export default function SightingForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!location) {
-      alert('Please wait for location to be determined')
-      return
-    }
+    if (!location) return
 
     setSubmitting(true)
     onSubmit({
@@ -101,7 +101,7 @@ export default function SightingForm({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 p-4">
       <div className="max-w-2xl mx-auto py-8">
         <button
           onClick={onBack}
@@ -110,7 +110,7 @@ export default function SightingForm({
           ← Back
         </button>
 
-        <h1 className="text-3xl font-bold text-tipai-green-900 text-center mb-2">
+        <h1 className="font-heading text-3xl font-semibold text-tipai-green-900 text-center mb-2">
           Sighting Details
         </h1>
         <p className="text-center text-gray-600 mb-8 capitalize">
@@ -118,6 +118,14 @@ export default function SightingForm({
         </p>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6 space-y-6">
+
+          {/* External save error */}
+          {externalError && (
+            <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <span>{externalError}</span>
+            </div>
+          )}
+
           {/* AI Identification */}
           {loadingAI && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -129,20 +137,20 @@ export default function SightingForm({
           )}
 
           {aiIdentification && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+            <div className="bg-tipai-green-50 border border-tipai-green-200 rounded-lg p-4 space-y-2">
               <div className="flex items-start gap-2">
-                <Check className="w-5 h-5 text-green-600 mt-0.5" />
+                <Check className="w-5 h-5 text-tipai-green-600 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-green-800 font-semibold">
+                  <p className="text-tipai-green-800 font-semibold">
                     {aiIdentification.common_name || 'Species identified'}
                   </p>
                   {aiIdentification.species && (
-                    <p className="text-green-700 text-sm italic">
+                    <p className="text-tipai-green-700 text-sm italic">
                       {aiIdentification.species}
                     </p>
                   )}
                   {aiIdentification.confidence !== undefined && (
-                    <p className="text-green-600 text-sm">
+                    <p className="text-tipai-green-600 text-sm">
                       Confidence: {aiIdentification.confidence}%
                     </p>
                   )}
@@ -166,8 +174,10 @@ export default function SightingForm({
                 <Loader className="w-4 h-4 animate-spin" />
                 <span>Getting location...</span>
               </div>
+            ) : locationError ? (
+              <p className="text-red-600 text-sm">{locationError}</p>
             ) : location ? (
-              <div className="flex items-start gap-2 text-gray-700 bg-gray-50 rounded-lg p-3">
+              <div className="flex items-start gap-2 text-gray-700 bg-tipai-stone-50 rounded-lg p-3">
                 <MapPin className="w-5 h-5 text-tipai-green-600 mt-0.5" />
                 <div>
                   <p className="font-mono text-sm">
