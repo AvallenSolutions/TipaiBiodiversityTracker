@@ -12,7 +12,8 @@ import {
   Trash2,
   Save,
   Loader,
-  Volume2
+  Volume2,
+  X
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -27,6 +28,7 @@ export default function SightingDetail() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const [editCategory, setEditCategory] = useState<CategoryType>('mammal')
   const [editSpecies, setEditSpecies] = useState('')
@@ -63,6 +65,7 @@ export default function SightingDetail() {
   async function handleSave() {
     if (!sighting) return
     setSaving(true)
+    setErrorMessage('')
     try {
       const { error } = await (supabase
         .from('sightings') as any)
@@ -85,7 +88,7 @@ export default function SightingDetail() {
       })
       setEditing(false)
     } catch (error: any) {
-      alert(`Error saving: ${error.message}`)
+      setErrorMessage(`Error saving: ${error.message}`)
     } finally {
       setSaving(false)
     }
@@ -96,6 +99,7 @@ export default function SightingDetail() {
     if (!confirm('Are you sure you want to delete this sighting? This cannot be undone.')) return
 
     setDeleting(true)
+    setErrorMessage('')
     try {
       const { error } = await supabase
         .from('sightings')
@@ -105,7 +109,7 @@ export default function SightingDetail() {
       if (error) throw error
       navigate('/dashboard')
     } catch (error: any) {
-      alert(`Error deleting: ${error.message}`)
+      setErrorMessage(`Error deleting: ${error.message}`)
       setDeleting(false)
     }
   }
@@ -116,7 +120,7 @@ export default function SightingDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tipai-green-50 to-tipai-green-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100">
         <div className="text-center">
           <Loader className="w-12 h-12 text-tipai-green-700 animate-spin mx-auto" />
           <p className="mt-4 text-gray-600">Loading sighting...</p>
@@ -127,7 +131,7 @@ export default function SightingDetail() {
 
   if (!sighting) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tipai-green-50 to-tipai-green-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100">
         <div className="text-center">
           <p className="text-gray-600 text-lg">Sighting not found</p>
           <button
@@ -144,7 +148,7 @@ export default function SightingDetail() {
   const aiData = sighting.ai_identification as any
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100">
       {/* Header */}
       <div className="bg-tipai-green-700 text-white">
         <div className="max-w-4xl mx-auto px-4 py-4">
@@ -170,6 +174,17 @@ export default function SightingDetail() {
           )}
 
           <div className="p-6 space-y-6">
+
+            {/* Error Banner */}
+            {errorMessage && (
+              <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <span>{errorMessage}</span>
+                <button onClick={() => setErrorMessage('')} className="ml-4 opacity-60 hover:opacity-100">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Title & Category */}
             {editing ? (
               <div className="space-y-4">
@@ -229,7 +244,7 @@ export default function SightingDetail() {
                 </div>
 
                 {sighting.common_name && (
-                  <h2 className="text-2xl font-bold text-gray-900">{sighting.common_name}</h2>
+                  <h2 className="font-heading text-2xl font-semibold text-gray-900">{sighting.common_name}</h2>
                 )}
                 {sighting.species_name && (
                   <p className="text-lg text-gray-600 italic">{sighting.species_name}</p>
@@ -245,7 +260,7 @@ export default function SightingDetail() {
             )}
 
             {/* Location */}
-            <div className="flex items-start gap-2 bg-gray-50 rounded-lg p-4">
+            <div className="flex items-start gap-2 bg-tipai-stone-50 rounded-lg p-4">
               <MapPin className="w-5 h-5 text-tipai-green-600 mt-0.5" />
               <div>
                 <p className="font-mono text-sm text-gray-700">
@@ -316,6 +331,7 @@ export default function SightingDetail() {
                     <button
                       onClick={() => {
                         setEditing(false)
+                        setErrorMessage('')
                         setEditCategory(sighting.category)
                         setEditSpecies(sighting.species_name || '')
                         setEditCommonName(sighting.common_name || '')

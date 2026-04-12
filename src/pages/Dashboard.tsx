@@ -17,7 +17,8 @@ import {
   Eye,
   Search,
   Download,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { formatCoordinates } from '../utils/geolocation'
@@ -93,6 +94,7 @@ export default function Dashboard() {
   const [dateTo, setDateTo] = useState('')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const loadSightings = useCallback(async () => {
     try {
@@ -145,15 +147,16 @@ export default function Dashboard() {
 
   async function handleSync() {
     setSyncing(true)
+    setSyncStatus(null)
     try {
       const result = await syncPendingSightings()
       if (result.synced > 0) {
-        alert(`${result.synced} sighting(s) synced successfully!`)
+        setSyncStatus({ type: 'success', message: `${result.synced} sighting(s) synced successfully!` })
         await loadSightings()
         await loadPendingCount()
       }
       if (result.failed > 0) {
-        alert(`${result.failed} sighting(s) failed to sync. Will retry later.`)
+        setSyncStatus({ type: 'error', message: `${result.failed} sighting(s) failed to sync. Will retry later.` })
       }
     } catch (error) {
       console.error('Sync error:', error)
@@ -198,13 +201,13 @@ export default function Dashboard() {
   const categories = ['all', 'mammal', 'bird', 'lizard', 'insect', 'plant', 'trace', 'fungi']
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100">
       {/* Header */}
       <div className="bg-tipai-green-700 text-white">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Tipai Biodiversity</h1>
+              <h1 className="font-heading text-2xl font-semibold">Tipai Biodiversity</h1>
               <p className="text-tipai-green-100 text-sm">
                 {profile?.full_name || profile?.email} • {profile?.user_role}
               </p>
@@ -228,6 +231,21 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+
+        {/* Sync Status Banner */}
+        {syncStatus && (
+          <div className={`mb-6 flex items-center justify-between p-4 rounded-lg text-sm font-medium ${
+            syncStatus.type === 'success'
+              ? 'bg-tipai-green-50 border border-tipai-green-200 text-tipai-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            <span>{syncStatus.message}</span>
+            <button onClick={() => setSyncStatus(null)} className="ml-4 opacity-60 hover:opacity-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Stats & Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -397,7 +415,7 @@ export default function Dashboard() {
                 <div
                   key={sighting.id}
                   onClick={() => navigate(`/sighting/${sighting.id}`)}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer flex flex-col"
                 >
                   {sighting.photo_url && (
                     <img
@@ -407,7 +425,7 @@ export default function Dashboard() {
                       loading="lazy"
                     />
                   )}
-                  <div className="p-4">
+                  <div className="p-4 flex flex-col flex-grow">
                     <div className="flex items-center justify-between mb-2">
                       <span className="px-3 py-1 bg-tipai-green-100 text-tipai-green-800 text-sm font-medium rounded-full capitalize">
                         {sighting.category}
@@ -418,7 +436,7 @@ export default function Dashboard() {
                     </div>
 
                     {sighting.common_name && (
-                      <h3 className="font-semibold text-gray-900 mb-1">
+                      <h3 className="font-heading font-semibold text-gray-900 mb-1 text-lg">
                         {sighting.common_name}
                       </h3>
                     )}
@@ -429,12 +447,12 @@ export default function Dashboard() {
                     )}
 
                     {sighting.notes && (
-                      <p className="text-sm text-gray-700 mb-3 line-clamp-2">
+                      <p className="text-sm text-gray-700 mb-3 line-clamp-2 flex-grow">
                         {sighting.notes}
                       </p>
                     )}
 
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <div className="mt-auto flex items-center gap-4 text-xs text-gray-500">
                       <div className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         <span>{formatCoordinates(sighting.latitude, sighting.longitude)}</span>

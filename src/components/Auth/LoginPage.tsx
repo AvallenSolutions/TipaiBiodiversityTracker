@@ -10,21 +10,23 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    setSuccessMessage('')
     setLoading(true)
 
     try {
       if (mode === 'guest') {
         await guestSignIn(email)
-        alert('A magic link has been sent to your email. Click it to log in and start logging sightings.')
+        setSuccessMessage('A magic link has been sent to your email. Click it to log in and start logging sightings.')
       } else if (isSignUp) {
         const userRole = mode === 'naturalist' ? 'naturalist' : 'staff'
         await signUp(email, password, fullName, userRole)
-        alert('Account created! Check your email to verify your account.')
+        setSuccessMessage('Account created! Check your email to verify your account.')
       } else {
         await signIn(email, password)
       }
@@ -37,14 +39,14 @@ export default function LoginPage() {
 
   if (mode === 'choice') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <Leaf className="mx-auto h-16 w-16 text-tipai-green-700" />
-            <h1 className="mt-6 text-4xl font-bold text-tipai-green-900">
+            <h1 className="font-heading mt-6 text-4xl font-semibold text-tipai-green-700">
               Tipai Biodiversity
             </h1>
-            <p className="mt-2 text-lg text-tipai-green-700">
+            <p className="mt-2 text-lg text-tipai-stone-600">
               Track and protect forest life
             </p>
           </div>
@@ -52,33 +54,33 @@ export default function LoginPage() {
           <div className="space-y-4">
             <button
               onClick={() => setMode('naturalist')}
-              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-green-200 hover:border-tipai-green-400"
+              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-stone-200 hover:border-tipai-green-400"
             >
               <UserCircle className="mx-auto h-12 w-12 text-tipai-green-700 mb-3" />
               <h2 className="text-xl font-semibold text-tipai-green-900">Naturalist</h2>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-tipai-stone-600 mt-2">
                 Full access with admin control
               </p>
             </button>
 
             <button
               onClick={() => setMode('staff')}
-              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-green-200 hover:border-tipai-green-400"
+              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-stone-200 hover:border-tipai-green-400"
             >
               <Users className="mx-auto h-12 w-12 text-tipai-green-700 mb-3" />
               <h2 className="text-xl font-semibold text-tipai-green-900">Staff</h2>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-tipai-stone-600 mt-2">
                 Log sightings and view your history
               </p>
             </button>
 
             <button
               onClick={() => setMode('guest')}
-              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-green-200 hover:border-tipai-green-400"
+              className="w-full bg-white rounded-lg p-6 shadow-md hover:shadow-lg transition-shadow border-2 border-tipai-stone-200 hover:border-tipai-green-400"
             >
               <Mail className="mx-auto h-12 w-12 text-tipai-green-700 mb-3" />
               <h2 className="text-xl font-semibold text-tipai-green-900">Guest</h2>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-tipai-stone-600 mt-2">
                 Quick login to log sightings during your visit
               </p>
             </button>
@@ -90,7 +92,7 @@ export default function LoginPage() {
 
   if (mode === 'guest') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <button
             onClick={() => setMode('choice')}
@@ -102,8 +104,8 @@ export default function LoginPage() {
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="text-center mb-6">
               <Mail className="mx-auto h-12 w-12 text-tipai-green-700" />
-              <h2 className="mt-4 text-2xl font-bold text-tipai-green-900">Guest Login</h2>
-              <p className="mt-2 text-sm text-gray-600">
+              <h2 className="font-heading mt-4 text-2xl font-semibold text-tipai-green-900">Guest Login</h2>
+              <p className="mt-2 text-sm text-tipai-stone-600">
                 Enter your email to start logging sightings
               </p>
             </div>
@@ -111,6 +113,12 @@ export default function LoginPage() {
             {error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
                 {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="mb-4 p-3 bg-tipai-green-50 border border-tipai-green-200 rounded text-tipai-green-800 text-sm">
+                {successMessage}
               </div>
             )}
 
@@ -144,7 +152,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-green-50 to-tipai-green-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <button
           onClick={() => setMode('choice')}
@@ -160,7 +168,7 @@ export default function LoginPage() {
             ) : (
               <Users className="mx-auto h-12 w-12 text-tipai-green-700" />
             )}
-            <h2 className="mt-4 text-2xl font-bold text-tipai-green-900">
+            <h2 className="font-heading mt-4 text-2xl font-semibold text-tipai-green-900">
               {mode === 'naturalist' ? 'Naturalist' : 'Staff'} {isSignUp ? 'Sign Up' : 'Login'}
             </h2>
           </div>
@@ -168,6 +176,12 @@ export default function LoginPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
               {error}
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mb-4 p-3 bg-tipai-green-50 border border-tipai-green-200 rounded text-tipai-green-800 text-sm">
+              {successMessage}
             </div>
           )}
 

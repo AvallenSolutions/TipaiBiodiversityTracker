@@ -16,6 +16,7 @@ export default function NewSighting() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null)
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [cachedAI, setCachedAI] = useState<AIIdentification | null>(null)
+  const [saveError, setSaveError] = useState<string>('')
 
   function handleCategorySelect(selectedCategory: CategoryType) {
     setCategory(selectedCategory)
@@ -57,7 +58,6 @@ export default function NewSighting() {
           data.aiIdentification,
           sightedAt
         )
-        alert('Sighting saved successfully!')
       } else {
         await saveSightingOffline({
           category,
@@ -70,13 +70,12 @@ export default function NewSighting() {
           ai_identification: data.aiIdentification,
           sighted_at: sightedAt
         })
-        alert('Sighting saved offline. It will sync when you are back online.')
       }
 
-      navigate('/dashboard')
+      navigate(navigator.onLine ? '/dashboard' : '/dashboard?saved=offline')
     } catch (error: any) {
       console.error('Error saving sighting:', error)
-      alert(`Error saving sighting: ${error.message}`)
+      setSaveError(`Error saving sighting: ${error.message}`)
     }
   }
 
@@ -106,6 +105,7 @@ export default function NewSighting() {
         onAIIdentification={setCachedAI}
         onSubmit={handleSubmit}
         onBack={() => setStep('media')}
+        externalError={saveError}
       />
     )
   }
