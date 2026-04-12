@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -9,6 +9,7 @@ import {
   Check,
   AlertCircle,
   Send,
+  Leaf,
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuth } from '@/context/AuthContext'
@@ -29,6 +30,16 @@ interface CapturedMedia {
 
 const STEPS = ['Category', 'Media', 'Details'] as const
 type Step = 0 | 1 | 2
+
+// Floating leaves for the success screen
+const LEAF_POSITIONS = [
+  { left: '10%', delay: '0ms',   size: 28 },
+  { left: '25%', delay: '200ms', size: 20 },
+  { left: '45%', delay: '80ms',  size: 24 },
+  { left: '62%', delay: '300ms', size: 18 },
+  { left: '78%', delay: '140ms', size: 22 },
+  { left: '90%', delay: '260ms', size: 16 },
+]
 
 export default function NewSightingPage() {
   const navigate = useNavigate()
@@ -55,6 +66,23 @@ export default function NewSightingPage() {
   // Submission
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Success screen
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [successPhotoUrl, setSuccessPhotoUrl] = useState<string | null>(null)
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-navigate when success screen is showing
+  useEffect(() => {
+    if (showSuccess) {
+      successTimerRef.current = setTimeout(() => {
+        navigate('/', { replace: true })
+      }, 2500)
+    }
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current)
+    }
+  }, [showSuccess, navigate])
 
   // Auto-fetch GPS when entering step 3
   useEffect(() => {
@@ -201,7 +229,12 @@ export default function NewSightingPage() {
         })
       }
 
-      navigate('/', { replace: true })
+      // Show success screen
+      const photoMedia = capturedMedia.find(m => m.type === 'photo')
+      if (photoMedia) {
+        setSuccessPhotoUrl(URL.createObjectURL(photoMedia.blob))
+      }
+      setShowSuccess(true)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to save sighting')
     } finally {
@@ -217,8 +250,66 @@ export default function NewSightingPage() {
     }
   }
 
+  // ─── Success Overlay ──────────────────────────────────────
+
+  if (showSuccess) {
+    return (
+      <div
+        className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-tipai-800 text-white"
+        onClick={() => navigate('/', { replace: true })}
+      >
+        {/* Floating leaf particles */}
+        {LEAF_POSITIONS.map((p, i) => (
+          <div
+            key={i}
+            className="animate-leaf-float pointer-events-none absolute bottom-1/3"
+            style={{ left: p.left, animationDelay: p.delay }}
+          >
+            <Leaf
+              style={{ width: p.size, height: p.size }}
+              className="text-tipai-300 opacity-80"
+            />
+          </div>
+        ))}
+
+        {/* Photo preview */}
+        {successPhotoUrl ? (
+          <div className="mb-6 h-48 w-48 overflow-hidden rounded-2xl shadow-2xl ring-4 ring-tipai-400/40">
+            <img src={successPhotoUrl} alt="Sighting" className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className="mb-6 flex h-48 w-48 items-center justify-center rounded-2xl bg-tipai-700 shadow-2xl ring-4 ring-tipai-400/40">
+            <Leaf className="h-20 w-20 text-tipai-300" strokeWidth={1.2} />
+          </div>
+        )}
+
+        {/* Species name */}
+        {commonName && (
+          <p className="font-heading text-4xl font-semibold text-white drop-shadow-lg">
+            {commonName}
+          </p>
+        )}
+        {scientificName && (
+          <p className="mt-1 font-heading text-lg italic text-tipai-200">
+            {scientificName}
+          </p>
+        )}
+
+        {/* Message */}
+        <p className="mt-6 px-8 text-center text-sm leading-relaxed text-tipai-200">
+          Added to Tipai's biodiversity record
+        </p>
+
+        {/* Tap hint */}
+        <p className="absolute bottom-10 text-xs text-tipai-400">Tap anywhere to continue</p>
+      </div>
+    )
+  }
+
+  // ─── Main Wizard ──────────────────────────────────────────
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
@@ -228,7 +319,7 @@ export default function NewSightingPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">New Sighting</h1>
+        <h1 className="font-heading text-2xl font-semibold text-gray-900">New Sighting</h1>
       </div>
 
       {/* Step indicator */}
@@ -237,12 +328,12 @@ export default function NewSightingPage() {
           <div key={label} className="flex flex-1 flex-col items-center gap-1">
             <div
               className={`h-1.5 w-full rounded-full transition-colors ${
-                i <= step ? 'bg-emerald-500' : 'bg-gray-200'
+                i <= step ? 'bg-tipai-600' : 'bg-gray-200'
               }`}
             />
             <span
               className={`text-xs font-medium ${
-                i <= step ? 'text-emerald-700' : 'text-gray-400'
+                i <= step ? 'text-tipai-700' : 'text-gray-400'
               }`}
             >
               {label}
@@ -265,7 +356,7 @@ export default function NewSightingPage() {
           {/* GPS location */}
           <div className="rounded-xl bg-gray-50 p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <MapPin className="h-4 w-4 text-emerald-600" />
+              <MapPin className="h-4 w-4 text-tipai-600" />
               GPS Location
             </div>
             {geoLoading && (
@@ -291,13 +382,13 @@ export default function NewSightingPage() {
 
           {/* AI suggestions */}
           {(aiLoading || aiSuggestions.length > 0) && (
-            <div className="rounded-xl bg-indigo-50 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-indigo-700">
+            <div className="rounded-xl bg-tipai-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-tipai-700">
                 <Sparkles className="h-4 w-4" />
                 AI Identification
               </div>
               {aiLoading ? (
-                <div className="mt-2 flex items-center gap-2 text-sm text-indigo-500">
+                <div className="mt-2 flex items-center gap-2 text-sm text-tipai-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Analyzing photo...
                 </div>
@@ -308,17 +399,17 @@ export default function NewSightingPage() {
                       key={i}
                       type="button"
                       onClick={() => selectAiSuggestion(s)}
-                      className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left ring-1 ring-indigo-100 transition hover:ring-indigo-300"
+                      className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left ring-1 ring-tipai-100 transition hover:ring-tipai-300"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">
+                        <p className="font-heading text-base font-semibold text-gray-900">
                           {s.common_name || 'Unknown'}
                         </p>
                         {s.scientific_name && (
                           <p className="text-xs italic text-gray-500">{s.scientific_name}</p>
                         )}
                       </div>
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                      <span className="rounded-full bg-tipai-100 px-2 py-0.5 text-xs font-medium text-tipai-700">
                         {(s.confidence * 100).toFixed(0)}%
                       </span>
                     </button>
@@ -340,7 +431,7 @@ export default function NewSightingPage() {
                 value={speciesSearch}
                 onChange={e => handleSpeciesSearch(e.target.value)}
                 placeholder="Search species..."
-                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
               />
             </div>
             {speciesSearch.length >= 2 && species.length > 0 && (
@@ -350,7 +441,7 @@ export default function NewSightingPage() {
                     <button
                       type="button"
                       onClick={() => selectSpecies(sp.id, sp.common_name, sp.scientific_name)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-emerald-50"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-tipai-50"
                     >
                       <div>
                         <span className="font-medium text-gray-900">{sp.common_name}</span>
@@ -359,7 +450,7 @@ export default function NewSightingPage() {
                         )}
                       </div>
                       {selectedSpeciesId === sp.id && (
-                        <Check className="h-4 w-4 text-emerald-600" />
+                        <Check className="h-4 w-4 text-tipai-600" />
                       )}
                     </button>
                   </li>
@@ -367,7 +458,7 @@ export default function NewSightingPage() {
               </ul>
             )}
             {commonName && (
-              <p className="mt-1 text-xs text-emerald-600">
+              <p className="mt-1 text-xs text-tipai-600">
                 Selected: {commonName}
                 {scientificName && <span className="italic"> ({scientificName})</span>}
               </p>
@@ -385,7 +476,7 @@ export default function NewSightingPage() {
               value={commonName}
               onChange={e => setCommonName(e.target.value)}
               placeholder="e.g., Indian Leopard"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
             />
           </div>
 
@@ -400,7 +491,7 @@ export default function NewSightingPage() {
               min={1}
               value={individualCount}
               onChange={e => setIndividualCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-24 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-24 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
             />
           </div>
 
@@ -415,7 +506,7 @@ export default function NewSightingPage() {
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Behavior, habitat details, weather..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
             />
           </div>
 
@@ -431,7 +522,7 @@ export default function NewSightingPage() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200 transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-tipai-700 py-3.5 text-sm font-semibold text-white shadow-lg shadow-tipai-900/20 transition hover:bg-tipai-800 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? (
               <Loader2 className="h-5 w-5 animate-spin" />

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, Sparkles, XCircle } from 'lucide-react'
 import type { AISuggestion } from '@/types'
 
@@ -19,12 +20,63 @@ function confidenceLabel(value: number): string {
   return 'Low'
 }
 
+function playChime() {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(1100, ctx.currentTime + 0.08)
+    gain.gain.setValueAtTime(0, ctx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.18)
+    osc.onended = () => ctx.close()
+  } catch {
+    // Web Audio not available — silently skip
+  }
+}
+
 export default function AiIdentifier({ suggestions, loading, onSelect }: AiIdentifierProps) {
+  // Track which suggestion IDs have been "animated in" to avoid re-triggering
+  const chimePlayedRef = useRef(false)
+  // Animated bar widths: indexed by suggestion position
+  const [barWidths, setBarWidths] = useState<number[]>([])
+
+  // When suggestions arrive, trigger bar animation and chime
+  useEffect(() => {
+    if (!suggestions || suggestions.length === 0) {
+      setBarWidths([])
+      chimePlayedRef.current = false
+      return
+    }
+
+    // Start bars at 0, then animate to target after one frame
+    setBarWidths(suggestions.map(() => 0))
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setBarWidths(suggestions.map(s => Math.round(s.confidence * 100)))
+      })
+    })
+
+    // Play chime if top suggestion is high confidence
+    if (!chimePlayedRef.current && suggestions[0] && suggestions[0].confidence >= 0.7) {
+      chimePlayedRef.current = true
+      playChime()
+    }
+
+    return () => cancelAnimationFrame(frame)
+  }, [suggestions])
+
   // ─── Loading state ─────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-tipai-600" />
         <p className="text-sm text-gray-500">Identifying species with AI...</p>
       </div>
     )
@@ -47,13 +99,12 @@ export default function AiIdentifier({ suggestions, loading, onSelect }: AiIdent
 
   // ─── Suggestion cards ──────────────────────────────────────
   const displayedSuggestions = suggestions.slice(0, 3)
-  const pct = (v: number) => Math.round(v * 100)
 
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-emerald-600" />
-        <h2 className="text-lg font-semibold text-gray-800">AI Suggestions</h2>
+        <Sparkles className="h-5 w-5 text-tipai-600" />
+        <h2 className="font-heading text-xl font-semibold text-gray-800">AI Suggestions</h2>
       </div>
 
       <div className="space-y-3">
@@ -62,11 +113,12 @@ export default function AiIdentifier({ suggestions, loading, onSelect }: AiIdent
             key={idx}
             type="button"
             onClick={() => onSelect(suggestion)}
-            className="w-full rounded-xl border border-gray-200 bg-white p-4 text-left transition hover:border-emerald-300 hover:shadow-md active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="animate-slide-up-fade w-full rounded-xl border border-gray-200 bg-white p-4 text-left transition hover:border-tipai-300 hover:shadow-md active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-tipai-400"
+            style={{ animationDelay: `${idx * 180}ms` }}
           >
             {/* Name row */}
             <div className="mb-1">
-              <p className="text-base font-semibold text-gray-800">
+              <p className="font-heading text-lg font-semibold text-gray-800">
                 {suggestion.common_name || 'Unknown species'}
               </p>
               {suggestion.scientific_name && (
@@ -81,13 +133,16 @@ export default function AiIdentifier({ suggestions, loading, onSelect }: AiIdent
               <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Confidence</span>
                 <span className="font-medium">
-                  {pct(suggestion.confidence)}% &middot; {confidenceLabel(suggestion.confidence)}
+                  {Math.round(suggestion.confidence * 100)}% &middot; {confidenceLabel(suggestion.confidence)}
                 </span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${confidenceColor(suggestion.confidence)}`}
-                  style={{ width: `${pct(suggestion.confidence)}%` }}
+                  className={`h-full rounded-full ${confidenceColor(suggestion.confidence)}`}
+                  style={{
+                    width: `${barWidths[idx] ?? 0}%`,
+                    transition: `width 700ms cubic-bezier(0.4, 0, 0.2, 1) ${idx * 180 + 300}ms`,
+                  }}
                 />
               </div>
             </div>
