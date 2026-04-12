@@ -33,11 +33,11 @@ export default function AppShell() {
   ]
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-tipai-stone-50">
       {/* Top bar */}
       <header className="bg-tipai-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50">
         <div>
-          <h1 className="text-lg font-bold">Tipai Biodiversity</h1>
+          <h1 className="font-heading text-xl font-semibold">Tipai Biodiversity</h1>
           <p className="text-tipai-200 text-xs">{profile?.display_name} · {profile?.role}</p>
         </div>
         <div className="flex items-center gap-3">

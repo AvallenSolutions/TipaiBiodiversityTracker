@@ -47,11 +47,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-50 to-tipai-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
         <div className="text-center">
           <Leaf className="mx-auto h-14 w-14 text-tipai-700" />
-          <h1 className="mt-4 text-3xl font-bold text-tipai-900">Tipai Biodiversity</h1>
+          <h1 className="mt-4 font-heading text-4xl font-semibold text-tipai-900">Tipai Biodiversity</h1>
           <p className="mt-1 text-tipai-700">Track and protect forest life</p>
         </div>
 
