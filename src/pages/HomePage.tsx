@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   PlusCircle,
   RefreshCw,
-  Eye,
   CloudOff,
   Leaf,
   MapPin,
@@ -22,49 +21,58 @@ import { getMediaUrl } from '@/lib/storage'
 import { formatCoordinates } from '@/hooks/useGeolocation'
 import type { SightingCategory } from '@/types'
 
-const categoryColors: Record<SightingCategory, string> = {
-  mammal: 'bg-amber-100 text-amber-700',
-  bird: 'bg-sky-100 text-sky-700',
-  reptile: 'bg-lime-100 text-lime-700',
-  amphibian: 'bg-teal-100 text-teal-700',
-  insect: 'bg-orange-100 text-orange-700',
-  plant: 'bg-green-100 text-green-700',
-  fungi: 'bg-purple-100 text-purple-700',
-  trace: 'bg-stone-100 text-stone-700',
+// Dark, dramatic placeholder gradients — like NatGeo field cards
+const categoryDarkBg: Record<SightingCategory, string> = {
+  mammal:    'bg-gradient-to-br from-amber-950 via-amber-900 to-amber-800',
+  bird:      'bg-gradient-to-br from-sky-950 via-sky-900 to-sky-800',
+  reptile:   'bg-gradient-to-br from-lime-950 via-lime-900 to-lime-800',
+  amphibian: 'bg-gradient-to-br from-teal-950 via-teal-900 to-teal-800',
+  insect:    'bg-gradient-to-br from-orange-950 via-orange-900 to-orange-800',
+  plant:     'bg-gradient-to-br from-tipai-900 via-tipai-800 to-tipai-700',
+  fungi:     'bg-gradient-to-br from-purple-950 via-purple-900 to-purple-800',
+  trace:     'bg-gradient-to-br from-stone-900 via-stone-800 to-stone-700',
 }
 
-// Warm, rich placeholder backgrounds for photo-less cards
-const categoryPlaceholderBg: Record<SightingCategory, string> = {
-  mammal: 'bg-gradient-to-br from-amber-200 to-amber-300',
-  bird: 'bg-gradient-to-br from-sky-200 to-sky-300',
-  reptile: 'bg-gradient-to-br from-lime-200 to-lime-300',
-  amphibian: 'bg-gradient-to-br from-teal-200 to-teal-300',
-  insect: 'bg-gradient-to-br from-orange-200 to-orange-300',
-  plant: 'bg-gradient-to-br from-green-200 to-green-300',
-  fungi: 'bg-gradient-to-br from-purple-200 to-purple-300',
-  trace: 'bg-gradient-to-br from-stone-200 to-stone-300',
+// Mounted image component with fallback on load error
+function SightingPhoto({
+  src,
+  alt,
+  category,
+}: {
+  src: string | null
+  alt: string
+  category: SightingCategory
+}) {
+  const [error, setError] = useState(false)
+  const showPlaceholder = !src || error
+
+  if (showPlaceholder) {
+    return (
+      <div className={`absolute inset-0 flex items-center justify-center ${categoryDarkBg[category]}`}>
+        <PlaceholderIcon category={category} />
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setError(true)}
+      className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+      loading="lazy"
+    />
+  )
 }
 
-const categoryIconColor: Record<SightingCategory, string> = {
-  mammal: 'text-amber-600',
-  bird: 'text-sky-600',
-  reptile: 'text-lime-600',
-  amphibian: 'text-teal-600',
-  insect: 'text-orange-600',
-  plant: 'text-green-600',
-  fungi: 'text-purple-600',
-  trace: 'text-stone-600',
-}
-
-function CategoryPlaceholderIcon({ category }: { category: SightingCategory }) {
-  const cls = `h-14 w-14 ${categoryIconColor[category]} opacity-70`
+function PlaceholderIcon({ category }: { category: SightingCategory }) {
+  const cls = 'h-16 w-16 text-white opacity-20 stroke-[1]'
   switch (category) {
-    case 'mammal': return <Cat className={cls} strokeWidth={1.5} />
-    case 'bird': return <Bird className={cls} strokeWidth={1.5} />
-    case 'trace': return <Footprints className={cls} strokeWidth={1.5} />
-    case 'insect': return <Bug className={cls} strokeWidth={1.5} />
-    case 'fungi': return <Flower2 className={cls} strokeWidth={1.5} />
-    default: return <Leaf className={cls} strokeWidth={1.5} />
+    case 'mammal':    return <Cat       className={cls} />
+    case 'bird':      return <Bird      className={cls} />
+    case 'trace':     return <Footprints className={cls} />
+    case 'insect':    return <Bug       className={cls} />
+    case 'fungi':     return <Flower2   className={cls} />
+    default:          return <Leaf      className={cls} />
   }
 }
 
@@ -97,121 +105,147 @@ export default function HomePage() {
   const uniqueCategories = new Set(sightings.map(s => s.category)).size
 
   return (
-    <div className="space-y-5">
-      {/* Personal biodiversity summary */}
-      <div className="rounded-2xl bg-tipai-700 p-5 text-white">
-        <p className="text-tipai-200 text-xs font-medium uppercase tracking-widest mb-1">Your Tipai Record</p>
-        <p className="font-heading text-3xl font-semibold leading-tight">
-          {sightings.length} {sightings.length === 1 ? 'sighting' : 'sightings'}
-        </p>
-        <div className="mt-3 flex items-center gap-4 text-sm text-tipai-200">
-          <span className="flex items-center gap-1.5">
-            <Leaf className="h-3.5 w-3.5" />
-            {uniqueSpecies} species
+    <div className="min-h-screen bg-tipai-stone-50">
+
+      {/* ── Editorial expedition header ─────────────────────── */}
+      <div className="bg-tipai-900 px-5 pt-5 pb-7">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-tipai-400">
+              Tipai Wildlife Reserve
+            </p>
+            <h1 className="mt-0.5 font-heading text-5xl font-semibold leading-none text-white">
+              Your Expedition
+            </h1>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="mt-1 rounded-full p-2 text-tipai-400 transition hover:text-white disabled:opacity-40"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div className="mt-4 flex items-center gap-5 border-t border-white/10 pt-4 text-sm text-tipai-300">
+          <span>
+            <span className="font-heading text-2xl font-semibold text-white">{sightings.length}</span>
+            {' '}
+            <span className="text-xs uppercase tracking-wider">sighting{sightings.length !== 1 ? 's' : ''}</span>
           </span>
-          <span className="flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5" />
-            {uniqueCategories} {uniqueCategories === 1 ? 'category' : 'categories'}
+          <span className="text-tipai-600">·</span>
+          <span>
+            <span className="font-heading text-2xl font-semibold text-white">{uniqueSpecies}</span>
+            {' '}
+            <span className="text-xs uppercase tracking-wider">species</span>
+          </span>
+          <span className="text-tipai-600">·</span>
+          <span>
+            <span className="font-heading text-2xl font-semibold text-white">{uniqueCategories}</span>
+            {' '}
+            <span className="text-xs uppercase tracking-wider">group{uniqueCategories !== 1 ? 's' : ''}</span>
           </span>
           {pendingCount > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-300">
-              <CloudOff className="h-3.5 w-3.5" />
-              {pendingCount} pending
-            </span>
+            <>
+              <span className="text-tipai-600">·</span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <CloudOff className="h-3.5 w-3.5" />
+                <span className="text-xs uppercase tracking-wider">{pendingCount} pending</span>
+              </span>
+            </>
           )}
         </div>
       </div>
 
-      {/* Header + refresh */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-heading text-2xl font-semibold text-gray-900">Recent Sightings</h2>
+      {/* ── Section header ──────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 pb-3 pt-6">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-tipai-500">From the Field</p>
+          <h2 className="font-heading text-3xl font-semibold text-tipai-900">Recent Sightings</h2>
+        </div>
         <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50"
-          aria-label="Refresh"
+          onClick={() => navigate('/new')}
+          className="flex items-center gap-1.5 rounded-full bg-tipai-700 px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:bg-tipai-800 active:scale-[0.97]"
         >
-          <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+          <PlusCircle className="h-3.5 w-3.5" />
+          Log
         </button>
       </div>
 
-      {/* Error */}
+      {/* ── Error ───────────────────────────────────────────── */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div className="mx-4 mb-3 flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
         </div>
       )}
 
-      {/* Loading */}
+      {/* ── Loading ─────────────────────────────────────────── */}
       {loading && !refreshing && (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-tipai-600" />
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-7 w-7 animate-spin text-tipai-600" />
         </div>
       )}
 
-      {/* Empty state */}
+      {/* ── Empty state ─────────────────────────────────────── */}
       {!loading && sightings.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-300 py-16 text-center">
-          <Leaf className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 font-heading text-xl text-gray-400">No sightings yet</p>
-          <p className="mt-1 text-sm text-gray-400">Head out and explore the forest!</p>
+        <div className="mx-4 rounded-2xl border border-dashed border-tipai-200 py-16 text-center">
+          <Leaf className="mx-auto h-10 w-10 text-tipai-200" strokeWidth={1} />
+          <p className="mt-4 font-heading text-2xl text-tipai-300">No sightings yet</p>
+          <p className="mt-1 text-sm text-tipai-400">Head out and explore the forest</p>
           <button
             onClick={() => navigate('/new')}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-tipai-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-tipai-800 active:scale-[0.98]"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-tipai-700 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-tipai-800 active:scale-[0.97]"
           >
             <PlusCircle className="h-4 w-4" />
-            Log First Sighting
+            Log Your First Sighting
           </button>
         </div>
       )}
 
-      {/* Photo-first sighting cards */}
-      <div className="space-y-4">
+      {/* ── Sighting cards ──────────────────────────────────── */}
+      <div className="space-y-5 px-4 pb-6">
         {sightings.map(sighting => {
           const media = sighting.media?.[0]
-          const thumbnailUrl = media ? getMediaUrl(media.storage_path) : null
+          const src = media ? getMediaUrl(media.storage_path) : null
 
           return (
             <Link
               key={sighting.id}
               to={`/sighting/${sighting.id}`}
-              className="block overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 transition hover:shadow-lg active:scale-[0.99]"
+              className="group block"
             >
-              {/* Photo / placeholder */}
-              <div className="relative h-52 overflow-hidden">
-                {thumbnailUrl ? (
-                  <img
-                    src={thumbnailUrl}
-                    alt={sighting.common_name || sighting.category}
-                    className="h-full w-full object-cover transition duration-300 hover:scale-105"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className={`flex h-full w-full items-center justify-center ${categoryPlaceholderBg[sighting.category]}`}>
-                    <CategoryPlaceholderIcon category={sighting.category} />
-                  </div>
-                )}
+              {/* Photo card */}
+              <div className="relative h-64 overflow-hidden rounded-2xl shadow-lg">
+                <SightingPhoto
+                  src={src}
+                  alt={sighting.common_name || sighting.category}
+                  category={sighting.category}
+                />
 
                 {/* Gradient scrim */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" />
 
-                {/* Overlay: category badge + name */}
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur-sm ${categoryColors[sighting.category]} bg-opacity-90`}>
+                {/* Text overlay */}
+                <div className="absolute bottom-0 left-0 right-0 p-5">
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.25em] text-white/50">
                     {sighting.category}
-                  </span>
-                  <p className="mt-1 font-heading text-xl font-semibold leading-snug text-white drop-shadow">
-                    {sighting.common_name || 'Unidentified'}
+                  </p>
+                  <p className="font-heading text-[1.85rem] font-semibold leading-tight text-white">
+                    {sighting.common_name || 'Unidentified Species'}
                   </p>
                   {sighting.scientific_name && (
-                    <p className="text-xs italic text-white/70">{sighting.scientific_name}</p>
+                    <p className="mt-0.5 text-sm italic text-white/55">
+                      {sighting.scientific_name}
+                    </p>
                   )}
                 </div>
               </div>
 
               {/* Meta row */}
-              <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
+              <div className="mt-2 flex items-center justify-between px-1 text-xs text-tipai-stone-500">
                 <span>{format(new Date(sighting.sighted_at), 'MMMM d, yyyy')}</span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
