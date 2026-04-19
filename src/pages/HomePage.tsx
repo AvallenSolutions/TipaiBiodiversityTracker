@@ -1,75 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import {
-  PlusCircle,
-  RefreshCw,
-  Eye,
-  CloudOff,
-  Leaf,
-  MapPin,
-  Loader2,
-  AlertCircle,
-  Cat,
-  Bird,
-  Footprints,
-  Bug,
-  Flower2,
-} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { useSightings } from '@/hooks/useSightings'
 import { getPendingCount } from '@/lib/offline'
 import { getMediaUrl } from '@/lib/storage'
-import { formatCoordinates } from '@/hooks/useGeolocation'
+import { DS, normalizeConf, catLetter } from '@/lib/ledger-design'
 import type { SightingCategory } from '@/types'
 
-const categoryColors: Record<SightingCategory, string> = {
-  mammal: 'bg-amber-100 text-amber-700',
-  bird: 'bg-sky-100 text-sky-700',
-  reptile: 'bg-lime-100 text-lime-700',
-  amphibian: 'bg-teal-100 text-teal-700',
-  insect: 'bg-orange-100 text-orange-700',
-  plant: 'bg-green-100 text-green-700',
-  fungi: 'bg-purple-100 text-purple-700',
-  trace: 'bg-stone-100 text-stone-700',
-}
+const mono = (extra?: React.CSSProperties): React.CSSProperties => ({
+  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase' as const, ...extra,
+})
 
-// Warm, rich placeholder backgrounds for photo-less cards
-const categoryPlaceholderBg: Record<SightingCategory, string> = {
-  mammal: 'bg-gradient-to-br from-amber-200 to-amber-300',
-  bird: 'bg-gradient-to-br from-sky-200 to-sky-300',
-  reptile: 'bg-gradient-to-br from-lime-200 to-lime-300',
-  amphibian: 'bg-gradient-to-br from-teal-200 to-teal-300',
-  insect: 'bg-gradient-to-br from-orange-200 to-orange-300',
-  plant: 'bg-gradient-to-br from-green-200 to-green-300',
-  fungi: 'bg-gradient-to-br from-purple-200 to-purple-300',
-  trace: 'bg-gradient-to-br from-stone-200 to-stone-300',
-}
-
-const categoryIconColor: Record<SightingCategory, string> = {
-  mammal: 'text-amber-600',
-  bird: 'text-sky-600',
-  reptile: 'text-lime-600',
-  amphibian: 'text-teal-600',
-  insect: 'text-orange-600',
-  plant: 'text-green-600',
-  fungi: 'text-purple-600',
-  trace: 'text-stone-600',
-}
-
-function CategoryPlaceholderIcon({ category }: { category: SightingCategory }) {
-  const cls = `h-14 w-14 ${categoryIconColor[category]} opacity-70`
-  switch (category) {
-    case 'mammal': return <Cat className={cls} strokeWidth={1.5} />
-    case 'bird': return <Bird className={cls} strokeWidth={1.5} />
-    case 'trace': return <Footprints className={cls} strokeWidth={1.5} />
-    case 'insect': return <Bug className={cls} strokeWidth={1.5} />
-    case 'fungi': return <Flower2 className={cls} strokeWidth={1.5} />
-    default: return <Leaf className={cls} strokeWidth={1.5} />
-  }
+const catColor: Record<SightingCategory, string> = {
+  mammal: DS.ochre, bird: '#4A7FA5', reptile: DS.forest,
+  amphibian: '#5E8A8A', insect: DS.rust, plant: DS.forest,
+  fungi: '#7B5E8A', trace: DS.inkSoft,
 }
 
 export default function HomePage() {
-  const { sightings, loading, error, fetchSightings } = useSightings()
+  const { sightings, loading, fetchSightings } = useSightings()
   const [pendingCount, setPendingCount] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const navigate = useNavigate()
@@ -83,144 +32,198 @@ export default function HomePage() {
     setRefreshing(true)
     try {
       await fetchSightings()
-      const count = await getPendingCount()
-      setPendingCount(count)
+      setPendingCount(await getPendingCount())
     } finally {
       setRefreshing(false)
     }
   }
 
-  const uniqueSpecies = new Set(
-    sightings.filter(s => s.species_id).map(s => s.species_id)
-  ).size
+  const uniqueSpecies = new Set(sightings.filter(s => s.species_id).map(s => s.species_id)).size
+  const todayCount = sightings.filter(s => {
+    const d = new Date(); d.setHours(0, 0, 0, 0)
+    return new Date(s.sighted_at) >= d
+  }).length
 
-  const uniqueCategories = new Set(sightings.map(s => s.category)).size
-
-  return (
-    <div className="space-y-5">
-      {/* Personal biodiversity summary */}
-      <div className="rounded-2xl bg-tipai-700 p-5 text-white">
-        <p className="text-tipai-200 text-xs font-medium uppercase tracking-widest mb-1">Your Tipai Record</p>
-        <p className="font-heading text-3xl font-semibold leading-tight">
-          {sightings.length} {sightings.length === 1 ? 'sighting' : 'sightings'}
-        </p>
-        <div className="mt-3 flex items-center gap-4 text-sm text-tipai-200">
-          <span className="flex items-center gap-1.5">
-            <Leaf className="h-3.5 w-3.5" />
-            {uniqueSpecies} species
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5" />
-            {uniqueCategories} {uniqueCategories === 1 ? 'category' : 'categories'}
-          </span>
-          {pendingCount > 0 && (
-            <span className="flex items-center gap-1.5 text-amber-300">
-              <CloudOff className="h-3.5 w-3.5" />
-              {pendingCount} pending
-            </span>
-          )}
+  if (loading && !refreshing) {
+    return (
+      <div style={{
+        minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: DS.paper,
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: DS.serif, fontSize: 24, fontWeight: 200, fontStyle: 'italic', color: DS.ink }}>
+            Reading the field…
+          </div>
+          <div style={{ ...mono({ color: DS.inkSoft, marginTop: 10 }) }}>Loading records</div>
         </div>
       </div>
+    )
+  }
 
-      {/* Header + refresh */}
-      <div className="flex items-center justify-between">
-        <h2 className="font-heading text-2xl font-semibold text-gray-900">Recent Sightings</h2>
+  return (
+    <div style={{ background: DS.paper, minHeight: '100vh', fontFamily: DS.sans }}>
+
+      {/* Stats header */}
+      <div style={{ padding: '24px 20px 0' }}>
+        <div style={{
+          background: DS.ivory, border: `1px solid ${DS.ink}`,
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+        }}>
+          {[
+            { label: 'Sightings', value: sightings.length },
+            { label: 'Species', value: uniqueSpecies },
+            { label: 'Today', value: todayCount },
+          ].map((s, i) => (
+            <div key={s.label} style={{
+              padding: '16px 14px',
+              borderRight: i < 2 ? `0.5px solid ${DS.inkHair}` : 'none',
+            }}>
+              <div style={{ ...mono({ color: DS.inkSoft, fontSize: 8 }) }}>{s.label}</div>
+              <div style={{ fontFamily: DS.serif, fontSize: 28, fontWeight: 200, letterSpacing: '-0.02em', color: DS.ink, marginTop: 2 }}>
+                {s.value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {pendingCount > 0 && (
+          <div style={{ background: DS.ochre, padding: '8px 14px', marginTop: -1, border: `1px solid ${DS.ink}`, borderTop: 'none' }}>
+            <span style={{ ...mono({ color: DS.ivory, fontSize: 8, letterSpacing: '0.18em' }) }}>
+              ○ {pendingCount} sighting{pendingCount !== 1 ? 's' : ''} pending sync
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Section header */}
+      <div style={{ padding: '28px 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div>
+          <div style={{ ...mono({ color: DS.ochre }) }}>◆ Recent entries</div>
+          <div style={{ fontFamily: DS.serif, fontSize: 26, fontWeight: 300, letterSpacing: '-0.02em', color: DS.ink, marginTop: 3 }}>
+            {sightings.length > 0 ? `${sightings.length} in the field record` : 'No entries yet'}
+          </div>
+        </div>
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 disabled:opacity-50"
-          aria-label="Refresh"
+          style={{
+            background: 'transparent', border: `0.5px solid ${DS.inkHair}`,
+            cursor: refreshing ? 'not-allowed' : 'pointer', opacity: refreshing ? 0.5 : 1,
+            ...mono({ color: DS.inkSoft, letterSpacing: '0.18em', padding: '6px 12px' }),
+          }}
         >
-          <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Reading…' : 'Refresh'}
         </button>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {/* Loading */}
-      {loading && !refreshing && (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-tipai-600" />
-        </div>
-      )}
-
       {/* Empty state */}
       {!loading && sightings.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-gray-300 py-16 text-center">
-          <Leaf className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 font-heading text-xl text-gray-400">No sightings yet</p>
-          <p className="mt-1 text-sm text-gray-400">Head out and explore the forest!</p>
+        <div style={{ margin: '0 20px', padding: '40px 24px', background: DS.ivory, border: `1px solid ${DS.ink}`, textAlign: 'center' }}>
+          <div style={{ fontFamily: DS.serif, fontSize: 22, fontWeight: 300, fontStyle: 'italic', color: DS.inkSoft, marginBottom: 20 }}>
+            Head out and make the first entry.
+          </div>
           <button
             onClick={() => navigate('/new')}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-tipai-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-tipai-800 active:scale-[0.98]"
+            style={{
+              padding: '14px 24px', background: DS.ink, color: DS.ivory, border: 'none',
+              cursor: 'pointer', ...mono({ letterSpacing: '0.25em' }),
+            }}
           >
-            <PlusCircle className="h-4 w-4" />
-            Log First Sighting
+            Log a sighting →
           </button>
         </div>
       )}
 
-      {/* Photo-first sighting cards */}
-      <div className="space-y-4">
-        {sightings.map(sighting => {
-          const media = sighting.media?.[0]
-          const thumbnailUrl = media ? getMediaUrl(media.storage_path) : null
+      {/* Sighting feed */}
+      <div style={{ padding: '0 20px 20px' }}>
+        <div style={{ border: `1px solid ${DS.ink}`, background: DS.ivory }}>
+          {sightings.map((s, i) => {
+            const media = s.media?.[0]
+            const thumbUrl = media ? getMediaUrl(media.storage_path) : null
+            const conf = normalizeConf(s.ai_confidence)
 
-          return (
-            <Link
-              key={sighting.id}
-              to={`/sighting/${sighting.id}`}
-              className="block overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 transition hover:shadow-lg active:scale-[0.99]"
-            >
-              {/* Photo / placeholder */}
-              <div className="relative h-52 overflow-hidden">
-                {thumbnailUrl ? (
-                  <img
-                    src={thumbnailUrl}
-                    alt={sighting.common_name || sighting.category}
-                    className="h-full w-full object-cover transition duration-300 hover:scale-105"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className={`flex h-full w-full items-center justify-center ${categoryPlaceholderBg[sighting.category]}`}>
-                    <CategoryPlaceholderIcon category={sighting.category} />
-                  </div>
-                )}
-
-                {/* Gradient scrim */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-
-                {/* Overlay: category badge + name */}
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur-sm ${categoryColors[sighting.category]} bg-opacity-90`}>
-                    {sighting.category}
-                  </span>
-                  <p className="mt-1 font-heading text-xl font-semibold leading-snug text-white drop-shadow">
-                    {sighting.common_name || 'Unidentified'}
-                  </p>
-                  {sighting.scientific_name && (
-                    <p className="text-xs italic text-white/70">{sighting.scientific_name}</p>
+            return (
+              <button
+                key={s.id}
+                onClick={() => navigate(`/sighting/${s.id}`)}
+                style={{
+                  display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 14, alignItems: 'center',
+                  width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
+                  borderBottom: i < sightings.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
+                  padding: '14px 16px', cursor: 'pointer',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(184,147,90,0.05)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                {/* Thumbnail */}
+                <div style={{ width: 60, height: 60, flexShrink: 0, position: 'relative' }}>
+                  {thumbUrl ? (
+                    <img src={thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      background: `linear-gradient(165deg, rgba(63,80,72,0.15) 0%, rgba(63,80,72,0.3) 100%)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{
+                        fontFamily: DS.mono, fontSize: 18, fontWeight: 500,
+                        color: catColor[s.category] ?? DS.ochre, opacity: 0.7,
+                      }}>{catLetter(s.category)}</span>
+                    </div>
                   )}
+                  {/* Category colour tab */}
+                  <div style={{
+                    position: 'absolute', left: 0, top: 0, width: 3, height: '100%',
+                    background: catColor[s.category] ?? DS.ochre,
+                  }} />
                 </div>
-              </div>
 
-              {/* Meta row */}
-              <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
-                <span>{format(new Date(sighting.sighted_at), 'MMMM d, yyyy')}</span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {formatCoordinates(sighting.latitude, sighting.longitude)}
-                </span>
-              </div>
-            </Link>
-          )
-        })}
+                {/* Info */}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: DS.serif, fontSize: 17, fontWeight: 300, color: DS.ink, lineHeight: 1.2, marginBottom: 3 }}>
+                    {s.common_name || <em style={{ color: DS.inkSoft }}>Unidentified</em>}
+                  </div>
+                  {s.scientific_name && (
+                    <div style={{ fontFamily: DS.serif, fontSize: 12, fontStyle: 'italic', color: DS.inkSoft, marginBottom: 3 }}>
+                      {s.scientific_name}
+                    </div>
+                  )}
+                  <div style={{ ...mono({ fontSize: 8, color: DS.inkSoft, letterSpacing: '0.15em' }) }}>
+                    {format(new Date(s.sighted_at), 'd MMM · HH:mm')} · {s.category}
+                  </div>
+                </div>
+
+                {/* Right */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                  {conf > 0 && (
+                    <span style={{
+                      ...mono({ fontSize: 8 }),
+                      color: conf >= 0.8 ? DS.forest : conf >= 0.5 ? DS.ochre : DS.rust,
+                    }}>
+                      {Math.round(conf * 100)}%
+                    </span>
+                  )}
+                  <span style={{ ...mono({ fontSize: 9, color: DS.ochre }) }}>→</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Log CTA */}
+      <div style={{ padding: '0 20px 24px' }}>
+        <button
+          onClick={() => navigate('/new')}
+          style={{
+            width: '100%', padding: '18px 20px', background: DS.ochre, color: DS.ink, border: 'none',
+            cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            ...mono({ letterSpacing: '0.25em' }),
+          }}
+        >
+          <span>Log a sighting</span>
+          <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 18, textTransform: 'none', letterSpacing: 0 }}>⊕</span>
+        </button>
       </div>
     </div>
   )

@@ -1,17 +1,16 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { Home, PlusCircle, BookOpen, BarChart3, Settings, LogOut, Wifi, WifiOff } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { getPendingCount } from '@/lib/offline'
+import { DS } from '@/lib/ledger-design'
 
-const navItems = [
-  { path: '/', icon: Home, label: 'Home' },
-  { path: '/new', icon: PlusCircle, label: 'Log' },
-  { path: '/species', icon: BookOpen, label: 'Species' },
-]
-
-const dashboardNav = { path: '/dashboard', icon: BarChart3, label: 'Dashboard' }
-const adminNav = { path: '/admin', icon: Settings, label: 'Admin' }
+const monoStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
+  fontFamily: DS.mono,
+  fontSize: 9,
+  letterSpacing: '0.2em',
+  textTransform: 'uppercase' as const,
+  ...extra,
+})
 
 export default function AppShell() {
   const { profile, signOut } = useAuth()
@@ -23,7 +22,6 @@ export default function AppShell() {
   const prevOnlineRef = useRef(navigator.onLine)
   const syncBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Poll pending count periodically
   useEffect(() => {
     function refreshPending() {
       getPendingCount().then(setPendingCount).catch(() => {})
@@ -36,30 +34,22 @@ export default function AppShell() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
-      // If we just came back online, show sync banner
       if (!prevOnlineRef.current) {
         getPendingCount().then(count => {
-          if (count > 0) {
-            setSyncedCount(count)
-          } else {
-            setSyncedCount(0)
-          }
+          setSyncedCount(count > 0 ? count : 0)
           setPendingCount(0)
-          // Auto-hide after 3 seconds
           if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
           syncBannerTimerRef.current = setTimeout(() => setSyncedCount(null), 3000)
         }).catch(() => {})
       }
       prevOnlineRef.current = true
     }
-
     const handleOffline = () => {
       setIsOnline(false)
       setSyncedCount(null)
       prevOnlineRef.current = false
       getPendingCount().then(setPendingCount).catch(() => {})
     }
-
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     return () => {
@@ -69,74 +59,125 @@ export default function AppShell() {
     }
   }, [])
 
-  const allNav = [
-    ...navItems,
-    ...(profile?.role === 'naturalist' || profile?.role === 'admin' ? [dashboardNav] : []),
-    ...(profile?.role === 'admin' ? [adminNav] : []),
+  const canSeeDashboard = profile?.role === 'naturalist' || profile?.role === 'admin'
+  const canSeeAdmin = profile?.role === 'admin'
+
+  const navItems = [
+    { path: '/', label: 'Home' },
+    { path: '/new', label: 'Log' },
+    { path: '/species', label: 'Species' },
+    ...(canSeeDashboard ? [{ path: '/dashboard', label: 'Ledger' }] : []),
+    ...(canSeeAdmin ? [{ path: '/admin', label: 'Admin' }] : []),
   ]
 
   return (
-    <div className="min-h-screen flex flex-col bg-tipai-stone-50">
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: DS.paper }}>
+
       {/* Offline banner */}
       {!isOnline && (
-        <div className="sticky top-0 z-[60] bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white">
-          You're offline — sightings will sync when you reconnect
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 60,
+          background: DS.rust, padding: '9px 20px', textAlign: 'center',
+        }}>
+          <span style={{ ...monoStyle({ fontSize: 9, color: DS.ivory, letterSpacing: '0.18em' }) }}>
+            ● Offline — sightings will sync when you reconnect
+          </span>
         </div>
       )}
 
       {/* Synced banner */}
       {isOnline && syncedCount !== null && (
-        <div className="sticky top-0 z-[60] bg-tipai-600 px-4 py-2 text-center text-sm font-medium text-white animate-fade-in">
-          {syncedCount > 0 ? `${syncedCount} sighting${syncedCount === 1 ? '' : 's'} synced ✓` : 'Back online ✓'}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 60,
+          background: DS.forest, padding: '9px 20px', textAlign: 'center',
+        }}>
+          <span style={{ ...monoStyle({ fontSize: 9, color: DS.ivory, letterSpacing: '0.18em' }) }}>
+            {syncedCount > 0
+              ? `● ${syncedCount} sighting${syncedCount === 1 ? '' : 's'} synced`
+              : '● Back online'}
+          </span>
         </div>
       )}
 
       {/* Top bar */}
-      <header className="bg-tipai-700 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50">
-        <div>
-          <h1 className="font-heading text-xl font-semibold">Tipai Biodiversity</h1>
-          <p className="text-tipai-200 text-xs">{profile?.display_name} · {profile?.role}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isOnline ? <Wifi className="w-4 h-4 text-green-300" /> : <WifiOff className="w-4 h-4 text-amber-300" />}
-          <button
-            onClick={async () => { await signOut(); navigate('/login') }}
-            className="p-2 rounded-lg hover:bg-tipai-600 transition-colors"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+      <header style={{
+        background: DS.paper, borderBottom: `1px solid ${DS.ink}`,
+        padding: '14px 20px 0',
+        position: 'sticky', top: 0, zIndex: 50,
+        flexShrink: 0,
+      }}>
+        <div style={{
+          borderTop: `3px double ${DS.ink}`, paddingTop: 12, paddingBottom: 12,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <img src="/wildlife-luxuries-logo.png" alt="Wildlife Luxuries"
+                 style={{ height: 34, width: 'auto', display: 'block' }} />
+            <div style={{ borderLeft: `0.5px solid ${DS.inkFaint}`, height: 24 }} />
+            <span style={{ ...monoStyle({ color: DS.inkSoft, letterSpacing: '0.15em' }) }}>
+              {profile?.display_name ?? 'Field Log'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <span style={{ ...monoStyle({ fontSize: 8, color: isOnline ? DS.forest : DS.rust, letterSpacing: '0.18em' }) }}>
+              {isOnline ? '● Online' : '○ Offline'}
+            </span>
+            <button
+              onClick={async () => { await signOut(); navigate('/login') }}
+              style={{
+                background: 'transparent', border: `0.5px solid ${DS.inkHair}`,
+                cursor: 'pointer', ...monoStyle({ fontSize: 8, color: DS.inkSoft }),
+                padding: '5px 10px', letterSpacing: '0.18em',
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Content */}
-      <main className="flex-1 pb-20">
+      <main style={{ flex: 1, paddingBottom: 72 }}>
         <Outlet />
       </main>
 
       {/* Bottom nav */}
-      <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-        <div className="flex items-center justify-around py-2">
-          {allNav.map(item => {
-            const active = location.pathname === item.path
-            const isLog = item.path === '/new'
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`relative flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
-                  active ? 'text-tipai-700' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                {isLog && pendingCount > 0 && (
-                  <span className="absolute top-0 right-1 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white" />
-                )}
-                <span className="text-[10px] font-medium">{item.label}</span>
-              </button>
-            )
-          })}
-        </div>
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: DS.ivory, borderTop: `1px solid ${DS.ink}`,
+        zIndex: 50, display: 'flex',
+      }}>
+        {navItems.map((item, i) => {
+          const active = location.pathname === item.path
+          const isLog = item.path === '/new'
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                flex: 1, padding: '12px 4px 16px', position: 'relative',
+                background: active ? DS.ink : 'transparent',
+                border: 'none',
+                borderRight: i < navItems.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
+                cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              }}
+            >
+              {isLog && pendingCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 8, right: '50%', marginRight: -16,
+                  width: 6, height: 6, borderRadius: 3, background: DS.ochre,
+                  border: `1.5px solid ${active ? DS.ink : DS.ivory}`,
+                }} />
+              )}
+              <span style={{
+                ...monoStyle({ fontSize: 9, letterSpacing: '0.18em', color: active ? DS.ivory : DS.inkSoft }),
+              }}>
+                {item.label}
+              </span>
+            </button>
+          )
+        })}
       </nav>
     </div>
   )
