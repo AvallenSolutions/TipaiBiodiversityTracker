@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Loader2, ChevronDown, ChevronUp, Leaf } from 'lucide-react'
 import { useSpecies } from '@/hooks/useSpecies'
+import { DS } from '@/lib/ledger-design'
+import { Mono, MonoIcon } from '@/components/logger/shared'
 import type { SightingCategory } from '@/types'
 
 const CATEGORIES: { value: SightingCategory | ''; label: string }[] = [
@@ -14,17 +15,6 @@ const CATEGORIES: { value: SightingCategory | ''; label: string }[] = [
   { value: 'fungi', label: 'Fungi' },
   { value: 'trace', label: 'Traces' },
 ]
-
-const categoryColors: Record<SightingCategory, string> = {
-  mammal: 'bg-amber-100 text-amber-700',
-  bird: 'bg-sky-100 text-sky-700',
-  reptile: 'bg-lime-100 text-lime-700',
-  amphibian: 'bg-teal-100 text-teal-700',
-  insect: 'bg-orange-100 text-orange-700',
-  plant: 'bg-green-100 text-green-700',
-  fungi: 'bg-purple-100 text-purple-700',
-  trace: 'bg-stone-100 text-stone-700',
-}
 
 export default function SpeciesLibraryPage() {
   const { species, loading, fetchSpecies } = useSpecies()
@@ -40,7 +30,6 @@ export default function SpeciesLibraryPage() {
     doFetch()
   }, [doFetch])
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchSpecies(activeCategory || undefined, search || undefined)
@@ -48,37 +37,55 @@ export default function SpeciesLibraryPage() {
     return () => clearTimeout(timer)
   }, [search, activeCategory, fetchSpecies])
 
-  function toggleExpand(id: string) {
-    setExpandedId(prev => (prev === id ? null : id))
-  }
-
   return (
-    <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-gray-900">Species Library</h1>
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 20px 40px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <Mono size={10} letter={0.25} color={DS.ochre}>§02 · The Library</Mono>
+        <h1 style={{
+          fontFamily: DS.serif, fontSize: 44, fontWeight: 200,
+          letterSpacing: '-0.03em', lineHeight: 1.0,
+          margin: '10px 0 14px', color: DS.ink,
+        }}>
+          A <em style={{ fontWeight: 300 }}>field guide</em>.
+        </h1>
+        <p style={{
+          fontFamily: DS.serif, fontSize: 17, fontWeight: 300,
+          fontStyle: 'italic', color: DS.inkSoft, maxWidth: 540,
+          lineHeight: 1.45, margin: 0,
+        }}>
+          Every species recorded so far. Search or browse by category.
+        </p>
+      </div>
 
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <div style={{ marginBottom: 20 }}>
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name..."
-          className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          placeholder="Search by name…"
+          style={{
+            width: '100%', padding: '10px 12px', border: `1px solid ${DS.ink}`,
+            fontFamily: DS.serif, fontSize: 15, background: DS.ivory,
+            color: DS.ink,
+          }}
         />
       </div>
 
       {/* Category filter pills */}
-      <div className="flex flex-wrap gap-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
         {CATEGORIES.map(cat => (
           <button
             key={cat.value}
             onClick={() => setActiveCategory(cat.value as SightingCategory | '')}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              activeCategory === cat.value
-                ? 'bg-emerald-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            style={{
+              padding: '6px 12px', border: `0.5px solid ${activeCategory === cat.value ? DS.ink : DS.inkFaint}`,
+              background: activeCategory === cat.value ? DS.ink : 'transparent',
+              color: activeCategory === cat.value ? DS.ivory : DS.ink,
+              cursor: 'pointer', fontFamily: DS.serif, fontSize: 13,
+              letterSpacing: '-0.01em', transition: 'all 150ms',
+            }}
           >
             {cat.label}
           </button>
@@ -87,111 +94,104 @@ export default function SpeciesLibraryPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <div style={{ padding: '40px 0', textAlign: 'center' }}>
+          <Mono size={10} color={DS.inkFaint} letter={0.25}>⋯ Loading the library</Mono>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && species.length === 0 && (
-        <div className="rounded-xl border border-dashed border-gray-300 py-12 text-center">
-          <Leaf className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-2 text-sm text-gray-500">No species found</p>
+        <div style={{
+          padding: '40px 24px', textAlign: 'center',
+          border: `0.5px dashed ${DS.inkFaint}`,
+        }}>
+          <h3 style={{
+            fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+            fontStyle: 'italic', color: DS.ink, margin: 0,
+          }}>No species found</h3>
         </div>
       )}
 
-      {/* Species grid */}
+      {/* Species list */}
       {!loading && species.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {species.map(sp => {
-            const isExpanded = expandedId === sp.id
-
-            return (
-              <div
-                key={sp.id}
-                className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-100 transition hover:shadow-md"
+        <div style={{ display: 'grid', gap: 0 }}>
+          {species.map((sp, idx) => (
+            <div
+              key={sp.id}
+              style={{
+                padding: '16px 0',
+                borderTop: idx === 0 ? `1px solid ${DS.ink}` : `0.5px solid ${DS.inkHair}`,
+                borderBottom: idx === species.length - 1 ? `1px solid ${DS.ink}` : 'none',
+              }}
+            >
+              <button
+                onClick={() => setExpandedId(expandedId === sp.id ? null : sp.id)}
+                style={{
+                  width: '100%', background: 'none', border: 'none',
+                  cursor: 'pointer', textAlign: 'left', padding: 0,
+                  display: 'grid', gridTemplateColumns: 'auto 1fr',
+                  gap: 12, alignItems: 'flex-start',
+                }}
               >
-                {/* Image */}
-                <div className="h-40 bg-gray-100">
-                  {sp.image_url ? (
-                    <img
-                      src={sp.image_url}
-                      alt={sp.common_name}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-gray-300">
-                      <Leaf className="h-12 w-12" />
-                    </div>
-                  )}
+                <div style={{
+                  width: 32, height: 32, border: `0.5px solid ${DS.ink}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: DS.forest, flexShrink: 0,
+                }}>
+                  <MonoIcon category={sp.category} size={20} />
                 </div>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{
+                    fontFamily: DS.serif, fontSize: 18, fontWeight: 400,
+                    letterSpacing: '-0.01em', margin: '0 0 2px', color: DS.ink,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {sp.common_name}
+                  </h3>
+                  {sp.scientific_name && (
+                    <p style={{
+                      fontFamily: DS.serif, fontSize: 13, fontStyle: 'italic',
+                      fontWeight: 300, color: DS.inkSoft, margin: 0,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {sp.scientific_name}
+                    </p>
+                  )}
+                  <Mono size={8} letter={0.18} color={DS.inkFaint} style={{ marginTop: 4 }}>
+                    {sp.category.toUpperCase()}
+                  </Mono>
+                </div>
+              </button>
 
-                {/* Info */}
-                <div className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {sp.common_name}
+              {/* Expanded details */}
+              {expandedId === sp.id && (sp.description || sp.habitat) && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `0.5px solid ${DS.inkHair}` }}>
+                  {sp.description && (
+                    <div style={{ marginBottom: 8 }}>
+                      <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 4 }}>Description</Mono>
+                      <p style={{
+                        fontFamily: DS.serif, fontSize: 14, fontWeight: 300,
+                        lineHeight: 1.5, color: DS.ink, margin: 0,
+                      }}>
+                        {sp.description}
                       </p>
-                      {sp.scientific_name && (
-                        <p className="truncate text-xs italic text-gray-500">
-                          {sp.scientific_name}
-                        </p>
-                      )}
                     </div>
-                    <span
-                      className={`ml-2 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${categoryColors[sp.category]}`}
-                    >
-                      {sp.category}
-                    </span>
-                  </div>
-
-                  {/* Expand toggle */}
-                  {(sp.description || sp.habitat) && (
-                    <button
-                      onClick={() => toggleExpand(sp.id)}
-                      className="mt-2 flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700"
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp className="h-3.5 w-3.5" />
-                          Less info
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                          More info
-                        </>
-                      )}
-                    </button>
                   )}
-
-                  {/* Expanded details */}
-                  {isExpanded && (
-                    <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
-                      {sp.description && (
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                            Description
-                          </p>
-                          <p className="mt-0.5 text-xs text-gray-600">{sp.description}</p>
-                        </div>
-                      )}
-                      {sp.habitat && (
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                            Habitat
-                          </p>
-                          <p className="mt-0.5 text-xs text-gray-600">{sp.habitat}</p>
-                        </div>
-                      )}
+                  {sp.habitat && (
+                    <div>
+                      <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 4 }}>Habitat</Mono>
+                      <p style={{
+                        fontFamily: DS.serif, fontSize: 14, fontWeight: 300,
+                        lineHeight: 1.5, color: DS.ink, margin: 0,
+                      }}>
+                        {sp.habitat}
+                      </p>
                     </div>
                   )}
                 </div>
-              </div>
-            )
-          })}
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
