@@ -1,16 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ArrowLeft,
-  MapPin,
-  Loader2,
-  Sparkles,
-  Search,
-  Check,
-  AlertCircle,
-  Send,
-  Leaf,
-} from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuth } from '@/context/AuthContext'
 import { useGeolocation, formatCoordinates } from '@/hooks/useGeolocation'
@@ -19,8 +8,8 @@ import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
 import { savePendingSighting } from '@/lib/offline'
 import { identifySpecies, isGeminiAvailable } from '@/lib/gemini'
-import CategoryPicker from '@/components/sighting/CategoryPicker'
-import MediaCapture from '@/components/sighting/MediaCapture'
+import { DS, normalizeConf } from '@/lib/ledger-design'
+import { Blank, ConfidenceDial, PickerSheet, Mono, MonoIcon } from '@/components/logger/shared'
 import type { SightingCategory, AISuggestion, MediaType } from '@/types'
 
 interface CapturedMedia {
@@ -28,125 +17,120 @@ interface CapturedMedia {
   type: MediaType
 }
 
-const STEPS = ['Category', 'Media', 'Details'] as const
-type Step = 0 | 1 | 2
+type Step = 'camera' | 'identifying' | 'identify' | 'entry' | 'sealed'
 
-// Floating leaves for the success screen
-const LEAF_POSITIONS = [
-  { left: '10%', delay: '0ms',   size: 28 },
-  { left: '25%', delay: '200ms', size: 20 },
-  { left: '45%', delay: '80ms',  size: 24 },
-  { left: '62%', delay: '300ms', size: 18 },
-  { left: '78%', delay: '140ms', size: 22 },
-  { left: '90%', delay: '260ms', size: 16 },
-]
+const BEHAVIOURS = ['Resting', 'Feeding', 'Moving', 'Stalking', 'Alert', 'Calling', 'Grooming', 'Mating', 'With young']
+const HABITATS = ['Sal forest', 'Bamboo', 'Grassland', 'Riverine', 'Water body', 'Rocky outcrop', 'Cultivated', 'Scrub']
+const WEATHERS = ['Clear', 'Overcast', 'Misty', 'Rain', 'After rain', 'Windy', 'Hot', 'Cold']
+const SEX_AGE = ['Adult male', 'Adult female', 'Subadult', 'Juvenile', 'Cub / fawn', 'Mixed group', 'Unknown']
+const CONFIDENCE = ['Certain', 'Likely', 'Uncertain']
 
 export default function NewSightingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { location, loading: geoLoading, error: geoError, getLocation } = useGeolocation()
+  const { location, getLocation } = useGeolocation()
   const { species, fetchSpecies } = useSpecies()
 
-  const [step, setStep] = useState<Step>(0)
+  const [step, setStep] = useState<Step>('camera')
   const [category, setCategory] = useState<SightingCategory | null>(null)
   const [capturedMedia, setCapturedMedia] = useState<CapturedMedia[]>([])
-
-  // Step 3 form
-  const [speciesSearch, setSpeciesSearch] = useState('')
-  const [selectedSpeciesId, setSelectedSpeciesId] = useState<string | null>(null)
-  const [commonName, setCommonName] = useState('')
-  const [scientificName, setScientificName] = useState('')
-  const [notes, setNotes] = useState('')
-  const [individualCount, setIndividualCount] = useState(1)
-
-  // AI
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([])
   const [aiLoading, setAiLoading] = useState(false)
+
+  // Entry fields
+  const [selectedSpecies, setSelectedSpecies] = useState<AISuggestion | null>(null)
+  const [count, setCount] = useState(1)
+  const [sexAge, setSexAge] = useState('Adult male')
+  const [behaviour, setBehaviour] = useState('Resting')
+  const [habitat, setHabitat] = useState('Sal forest')
+  const [weather, setWeather] = useState('Overcast')
+  const [confidence, setConfidence] = useState('Likely')
+  const [notes, setNotes] = useState('')
+  const [picker, setPicker] = useState<string | null>(null)
 
   // Submission
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Success screen
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [successPhotoUrl, setSuccessPhotoUrl] = useState<string | null>(null)
-  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Camera
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // Auto-navigate when success screen is showing
-  useEffect(() => {
-    if (showSuccess) {
-      successTimerRef.current = setTimeout(() => {
-        navigate('/', { replace: true })
-      }, 2500)
+  const stopStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
     }
-    return () => {
-      if (successTimerRef.current) clearTimeout(successTimerRef.current)
-    }
-  }, [showSuccess, navigate])
+  }, [])
 
-  // Auto-fetch GPS when entering step 3
+  const startCamera = useCallback(async () => {
+    setCameraError(null)
+    stopStream()
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      })
+      streamRef.current = stream
+      if (videoRef.current) videoRef.current.srcObject = stream
+    } catch (err: any) {
+      setCameraError(err.message || 'Camera access denied')
+    }
+  }, [stopStream])
+
+  const handleCapture = () => {
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.drawImage(video, 0, 0)
+    canvas.toBlob(blob => {
+      if (blob) {
+        setCapturedMedia(prev => [...prev, { blob, type: 'photo' }])
+        setStep('identifying')
+      }
+    }, 'image/jpeg', 0.85)
+  }
+
   useEffect(() => {
-    if (step === 2) {
+    if (step === 'camera') {
+      startCamera()
+      return () => stopStream()
+    }
+  }, [step, startCamera, stopStream])
+
+  useEffect(() => {
+    if (step === 'identifying') {
+      setTimeout(() => {
+        const photo = capturedMedia[capturedMedia.length - 1]
+        if (photo?.type === 'photo' && isGeminiAvailable() && category) {
+          setAiLoading(true)
+          identifySpecies(photo.blob, category)
+            .then(setAiSuggestions)
+            .catch(() => setAiSuggestions([]))
+            .finally(() => {
+              setAiLoading(false)
+              setStep('identify')
+            })
+        } else {
+          setStep('identify')
+        }
+      }, 800)
+    }
+  }, [step])
+
+  useEffect(() => {
+    if (step === 'entry') {
       getLocation()
     }
   }, [step, getLocation])
-
-  // Run AI identification when entering step 3 with photos
-  useEffect(() => {
-    if (step !== 2 || !category) return
-    const photo = capturedMedia.find(m => m.type === 'photo')
-    if (!photo || !isGeminiAvailable()) return
-
-    let cancelled = false
-    setAiLoading(true)
-    identifySpecies(photo.blob, category)
-      .then(suggestions => {
-        if (!cancelled) setAiSuggestions(suggestions)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setAiLoading(false)
-      })
-
-    return () => { cancelled = true }
-  }, [step, category, capturedMedia])
-
-  // Fetch species for search
-  const handleSpeciesSearch = useCallback(
-    (query: string) => {
-      setSpeciesSearch(query)
-      if (query.length >= 2) {
-        fetchSpecies(category ?? undefined, query)
-      }
-    },
-    [fetchSpecies, category]
-  )
-
-  function handleCategorySelect(cat: SightingCategory) {
-    setCategory(cat)
-    setStep(1)
-  }
-
-  function handleMediaCapture(blob: Blob, type: MediaType) {
-    setCapturedMedia(prev => [...prev, { blob, type }])
-  }
-
-  function handleMediaDone() {
-    setStep(2)
-  }
-
-  function selectAiSuggestion(suggestion: AISuggestion) {
-    setCommonName(suggestion.common_name || '')
-    setScientificName(suggestion.scientific_name || '')
-    if (suggestion.category) setCategory(suggestion.category)
-  }
-
-  function selectSpecies(id: string, common: string, scientific: string | null) {
-    setSelectedSpeciesId(id)
-    setCommonName(common)
-    setScientificName(scientific || '')
-    setSpeciesSearch('')
-  }
 
   async function handleSubmit() {
     if (!category || !user) return
@@ -157,13 +141,9 @@ export default function NewSightingPage() {
     const now = new Date().toISOString()
     const lat = location?.latitude ?? 0
     const lng = location?.longitude ?? 0
-    const accuracy = location?.accuracy ?? null
-
-    const isOnline = navigator.onLine
 
     try {
-      if (isOnline) {
-        // Upload media
+      if (navigator.onLine) {
         const mediaRecords: { path: string; type: MediaType; mime: string }[] = []
         for (let i = 0; i < capturedMedia.length; i++) {
           const m = capturedMedia[i]!
@@ -171,29 +151,25 @@ export default function NewSightingPage() {
           mediaRecords.push({ path, type: m.type, mime: m.blob.type })
         }
 
-        // Insert sighting
-        const { error: insertError } = await (supabase.from('sightings') as any).insert({
+        await (supabase.from('sightings') as any).insert({
           id: sightingId,
           user_id: user.id,
-          species_id: selectedSpeciesId,
+          species_id: null,
           category,
-          common_name: commonName || null,
-          scientific_name: scientificName || null,
+          common_name: selectedSpecies?.common_name || null,
+          scientific_name: selectedSpecies?.scientific_name || null,
           notes: notes || null,
           latitude: lat,
           longitude: lng,
-          location_accuracy: accuracy,
           sighted_at: now,
-          verification_status: aiSuggestions.length > 0 ? 'ai_suggested' : 'unverified',
-          ai_confidence: aiSuggestions[0]?.confidence ?? null,
+          verification_status: 'unverified',
+          ai_confidence: selectedSpecies?.confidence ?? null,
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
-          individual_count: individualCount,
+          individual_count: count,
         })
-        if (insertError) throw insertError
 
-        // Insert media records
         if (mediaRecords.length > 0) {
-          const { error: mediaError } = await (supabase.from('sighting_media') as any).insert(
+          await (supabase.from('sighting_media') as any).insert(
             mediaRecords.map((m, i) => ({
               id: uuidv4(),
               sighting_id: sightingId,
@@ -203,23 +179,21 @@ export default function NewSightingPage() {
               size_bytes: capturedMedia[i]!.blob.size,
             }))
           )
-          if (mediaError) throw mediaError
         }
       } else {
-        // Save offline
         await savePendingSighting({
           id: sightingId,
           category,
-          common_name: commonName || null,
-          scientific_name: scientificName || null,
+          common_name: selectedSpecies?.common_name || null,
+          scientific_name: selectedSpecies?.scientific_name || null,
           notes: notes || null,
           latitude: lat,
           longitude: lng,
-          location_accuracy: accuracy,
+          location_accuracy: location?.accuracy ?? null,
           sighted_at: now,
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
-          ai_confidence: aiSuggestions[0]?.confidence ?? null,
-          individual_count: individualCount,
+          ai_confidence: selectedSpecies?.confidence ?? null,
+          individual_count: count,
           media: capturedMedia.map(m => ({
             blob: m.blob,
             type: m.type,
@@ -229,312 +203,312 @@ export default function NewSightingPage() {
         })
       }
 
-      // Show success screen
-      const photoMedia = capturedMedia.find(m => m.type === 'photo')
-      if (photoMedia) {
-        setSuccessPhotoUrl(URL.createObjectURL(photoMedia.blob))
-      }
-      setShowSuccess(true)
+      setStep('sealed')
+      setTimeout(() => navigate('/', { replace: true }), 2500)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to save sighting')
-    } finally {
       setSubmitting(false)
     }
   }
 
-  function goBack() {
-    if (step === 0) {
-      navigate(-1)
-    } else {
-      setStep((step - 1) as Step)
-    }
-  }
+  const open = (kind: string) => () => setPicker(kind)
 
-  // ─── Success Overlay ──────────────────────────────────────
+  // ─── Step: Camera (pure black viewfinder) ───────────────────────────
 
-  if (showSuccess) {
+  if (step === 'camera') {
     return (
-      <div
-        className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-tipai-800 text-white"
-        onClick={() => navigate('/', { replace: true })}
-      >
-        {/* Floating leaf particles */}
-        {LEAF_POSITIONS.map((p, i) => (
-          <div
-            key={i}
-            className="animate-leaf-float pointer-events-none absolute bottom-1/3"
-            style={{ left: p.left, animationDelay: p.delay }}
+      <div style={{
+        position: 'fixed', inset: 0, background: '#000',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div style={{
+            position: 'absolute', top: 12, left: 0, right: 0, padding: '0 20px',
+            display: 'flex', justifyContent: 'space-between',
+          }}>
+            <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
+            <Mono size={9} color={DS.ivory} letter={0.22} style={{ color: DS.ochre }}>● REC</Mono>
+            <Mono size={9} color={DS.ivory} letter={0.22}>Now</Mono>
+          </div>
+        </div>
+
+        <div style={{ padding: '20px 0 40px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 40 }}>
+          <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: DS.ivory, cursor: 'pointer', fontSize: 20 }}>←</button>
+          <button
+            onClick={handleCapture}
+            style={{
+              width: 76, height: 76, borderRadius: 38,
+              border: `1.5px solid ${DS.ivory}`,
+              background: 'none', cursor: 'pointer', position: 'relative',
+            }}
           >
-            <Leaf
-              style={{ width: p.size, height: p.size }}
-              className="text-tipai-300 opacity-80"
-            />
-          </div>
-        ))}
-
-        {/* Photo preview */}
-        {successPhotoUrl ? (
-          <div className="mb-6 h-48 w-48 overflow-hidden rounded-2xl shadow-2xl ring-4 ring-tipai-400/40">
-            <img src={successPhotoUrl} alt="Sighting" className="h-full w-full object-cover" />
-          </div>
-        ) : (
-          <div className="mb-6 flex h-48 w-48 items-center justify-center rounded-2xl bg-tipai-700 shadow-2xl ring-4 ring-tipai-400/40">
-            <Leaf className="h-20 w-20 text-tipai-300" strokeWidth={1.2} />
-          </div>
-        )}
-
-        {/* Species name */}
-        {commonName && (
-          <p className="font-heading text-4xl font-semibold text-white drop-shadow-lg">
-            {commonName}
-          </p>
-        )}
-        {scientificName && (
-          <p className="mt-1 font-heading text-lg italic text-tipai-200">
-            {scientificName}
-          </p>
-        )}
-
-        {/* Message */}
-        <p className="mt-6 px-8 text-center text-sm leading-relaxed text-tipai-200">
-          Added to Tipai's biodiversity record
-        </p>
-
-        {/* Tap hint */}
-        <p className="absolute bottom-10 text-xs text-tipai-400">Tap anywhere to continue</p>
+            <div style={{
+              position: 'absolute', inset: 6, borderRadius: '50%',
+              background: DS.ivory,
+            }} />
+          </button>
+          <div style={{ width: 40 }} />
+        </div>
+        <canvas ref={canvasRef} className="hidden" />
       </div>
     )
   }
 
-  // ─── Main Wizard ──────────────────────────────────────────
+  // ─── Step: Identifying (interstitial) ──────────────────────────────
 
-  return (
-    <div className="space-y-4 p-4">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={goBack}
-          className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100"
-          aria-label="Back"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="font-heading text-2xl font-semibold text-gray-900">New Sighting</h1>
-      </div>
-
-      {/* Step indicator */}
-      <div className="flex items-center gap-2">
-        {STEPS.map((label, i) => (
-          <div key={label} className="flex flex-1 flex-col items-center gap-1">
-            <div
-              className={`h-1.5 w-full rounded-full transition-colors ${
-                i <= step ? 'bg-tipai-600' : 'bg-gray-200'
-              }`}
-            />
-            <span
-              className={`text-xs font-medium ${
-                i <= step ? 'text-tipai-700' : 'text-gray-400'
-              }`}
-            >
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Step 1: Category */}
-      {step === 0 && <CategoryPicker onSelect={handleCategorySelect} />}
-
-      {/* Step 2: Media */}
-      {step === 1 && (
-        <MediaCapture onMediaCapture={handleMediaCapture} onDone={handleMediaDone} />
-      )}
-
-      {/* Step 3: Details */}
-      {step === 2 && (
-        <div className="space-y-5">
-          {/* GPS location */}
-          <div className="rounded-xl bg-gray-50 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <MapPin className="h-4 w-4 text-tipai-600" />
-              GPS Location
+  if (step === 'identifying') {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: '#0b0e0c', color: DS.ivory,
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: DS.serif, fontSize: 28, fontWeight: 300, letterSpacing: '-0.01em', lineHeight: 1.1 }}>
+              <div style={{ marginBottom: 8 }}>→ Reading the frame</div>
+              <div style={{ opacity: 0.4, marginBottom: 8 }}>Consulting the field guide</div>
+              <div style={{ opacity: 0.4 }}>Ranking candidates</div>
             </div>
-            {geoLoading && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Acquiring location...
-              </div>
-            )}
-            {geoError && (
-              <p className="mt-2 text-sm text-red-600">{geoError}</p>
-            )}
-            {location && (
-              <p className="mt-1 text-sm font-mono text-gray-600">
-                {formatCoordinates(location.latitude, location.longitude)}
-                {location.accuracy && (
-                  <span className="ml-2 text-xs text-gray-400">
-                    (+-{location.accuracy.toFixed(0)}m)
-                  </span>
-                )}
-              </p>
-            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Step: Identify (telegram sheet) ───────────────────────────────
+
+  if (step === 'identify') {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: '#0b0e0c',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: DS.bone, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Mono size={10} color={DS.inkFaint} letter={0.22}>Photo preview</Mono>
+        </div>
+
+        <div style={{
+          flex: 1, background: DS.ivory, borderRadius: '16px 16px 0 0',
+          padding: '24px 20px 0', overflow: 'auto',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+            paddingBottom: 12, borderBottom: `1px solid ${DS.ink}`,
+          }}>
+            <div>
+              <Mono size={10} letter={0.22} color={DS.ochre}>◆ Telegram</Mono>
+              <h2 style={{ fontFamily: DS.serif, fontSize: 18, fontWeight: 400, margin: '4px 0 0', color: DS.ink }}>The field guide reports</h2>
+            </div>
+            {aiSuggestions[0] && <ConfidenceDial value={normalizeConf(aiSuggestions[0].confidence)} size={48} />}
           </div>
 
-          {/* AI suggestions */}
-          {(aiLoading || aiSuggestions.length > 0) && (
-            <div className="rounded-xl bg-tipai-50 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-tipai-700">
-                <Sparkles className="h-4 w-4" />
-                AI Identification
-              </div>
-              {aiLoading ? (
-                <div className="mt-2 flex items-center gap-2 text-sm text-tipai-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyzing photo...
-                </div>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {aiSuggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => selectAiSuggestion(s)}
-                      className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left ring-1 ring-tipai-100 transition hover:ring-tipai-300"
-                    >
-                      <div>
-                        <p className="font-heading text-base font-semibold text-gray-900">
-                          {s.common_name || 'Unknown'}
-                        </p>
-                        {s.scientific_name && (
-                          <p className="text-xs italic text-gray-500">{s.scientific_name}</p>
-                        )}
-                      </div>
-                      <span className="rounded-full bg-tipai-100 px-2 py-0.5 text-xs font-medium text-tipai-700">
-                        {(s.confidence * 100).toFixed(0)}%
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+          {aiLoading ? (
+            <div style={{ padding: '40px 0', textAlign: 'center' }}>
+              <Mono size={10} color={DS.inkFaint} letter={0.22}>⋯ Analyzing</Mono>
             </div>
+          ) : aiSuggestions.length > 0 ? (
+            <>
+              <button onClick={() => { setSelectedSpecies(aiSuggestions[0]); setStep('entry'); }} style={{
+                textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '20px 0 22px', borderBottom: `0.5px solid ${DS.inkHair}`,
+              }}>
+                <Mono size={9} letter={0.2} color={DS.inkSoft}>MAM · PRIMARY</Mono>
+                <div style={{
+                  fontFamily: DS.serif, fontSize: 36, fontWeight: 300,
+                  color: DS.ink, letterSpacing: '-0.02em', lineHeight: 1, marginTop: 8,
+                }}>{aiSuggestions[0].common_name}</div>
+                <div style={{
+                  fontFamily: DS.serif, fontSize: 16, fontStyle: 'italic',
+                  fontWeight: 300, color: DS.inkSoft, marginTop: 4,
+                }}>{aiSuggestions[0].scientific_name}</div>
+              </button>
+
+              <button onClick={() => { setSelectedSpecies(null); setStep('entry'); }} style={{
+                background: 'transparent', border: 'none', padding: '16px 0 24px',
+                borderTop: `0.5px solid ${DS.ink}`, cursor: 'pointer', textAlign: 'center',
+                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+                textTransform: 'uppercase', color: DS.ink,
+              }}>
+                None of these — identify by hand
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setStep('entry')} style={{
+              background: 'transparent', border: 'none', padding: '20px',
+              cursor: 'pointer', textAlign: 'center',
+              fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+              color: DS.ink,
+            }}>Continue without AI →</button>
           )}
+        </div>
+      </div>
+    )
+  }
 
-          {/* Species search */}
+  // ─── Step: Entry (journal page) ────────────────────────────────────
+
+  if (step === 'entry') {
+    const when = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long' })
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+    const coords = location ? formatCoordinates(location.latitude, location.longitude) : '—'
+
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: DS.ivory,
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        <div style={{
+          padding: '58px 20px 12px', display: 'flex',
+          justifyContent: 'space-between', alignItems: 'flex-end',
+          borderBottom: `1px solid ${DS.ink}`,
+        }}>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Species
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={speciesSearch}
-                onChange={e => handleSpeciesSearch(e.target.value)}
-                placeholder="Search species..."
-                className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
-              />
-            </div>
-            {speciesSearch.length >= 2 && species.length > 0 && (
-              <ul className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-                {species.map(sp => (
-                  <li key={sp.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectSpecies(sp.id, sp.common_name, sp.scientific_name)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-tipai-50"
-                    >
-                      <div>
-                        <span className="font-medium text-gray-900">{sp.common_name}</span>
-                        {sp.scientific_name && (
-                          <span className="ml-2 italic text-gray-500">{sp.scientific_name}</span>
-                        )}
-                      </div>
-                      {selectedSpeciesId === sp.id && (
-                        <Check className="h-4 w-4 text-tipai-600" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {commonName && (
-              <p className="mt-1 text-xs text-tipai-600">
-                Selected: {commonName}
-                {scientificName && <span className="italic"> ({scientificName})</span>}
-              </p>
-            )}
+            <Mono size={10} letter={0.22} color={DS.ochre}>◆ The Entry</Mono>
+            <h1 style={{ fontFamily: DS.serif, fontSize: 26, fontWeight: 300, margin: '2px 0 0', color: DS.ink }}>№ 0001 · {when}</h1>
+          </div>
+          <button onClick={() => setStep('camera')} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.2em',
+            color: DS.ink, textTransform: 'uppercase',
+          }}>← Back</button>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{
+            padding: '24px 22px 16px',
+            fontFamily: DS.serif, fontSize: 18, fontWeight: 300, lineHeight: 1.75,
+            color: DS.ink, letterSpacing: '-0.005em',
+          }}>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 48, fontWeight: 200,
+              float: 'left', lineHeight: 0.85, marginRight: 6, marginTop: 2,
+              fontStyle: 'italic', color: DS.ink,
+            }}>O</span>
+            n the morning of <strong style={{ fontWeight: 400 }}>{when}</strong>, at <strong style={{ fontWeight: 400 }}>{time}</strong>, I observed{' '}
+            <Blank onClick={open('count')} placeholder="how many?">{count}</Blank>{' '}
+            <Blank onClick={open('sexAge')} placeholder="sex & age">{sexAge.toLowerCase()}</Blank>{' '}
+            <em style={{ fontWeight: 300 }}>{selectedSpecies?.scientific_name || '?'}</em> — behaviour:{' '}
+            <Blank onClick={open('behaviour')} placeholder="what?">{behaviour.toLowerCase()}</Blank> — in{' '}
+            <Blank onClick={open('habitat')} placeholder="habitat">{habitat.toLowerCase()}</Blank>, light{' '}
+            <Blank onClick={open('weather')} placeholder="weather">{weather.toLowerCase()}</Blank>, at{' '}
+            <strong style={{ fontWeight: 400, fontFamily: DS.mono, fontSize: 15, letterSpacing: '0.02em' }}>{coords}</strong>. Confidence:{' '}
+            <Blank onClick={open('confidence')} placeholder="how sure?">{confidence.toLowerCase()}</Blank>.
           </div>
 
-          {/* Common name (manual) */}
-          <div>
-            <label htmlFor="commonName" className="mb-1 block text-sm font-medium text-gray-700">
-              Common Name
-            </label>
-            <input
-              id="commonName"
-              type="text"
-              value={commonName}
-              onChange={e => setCommonName(e.target.value)}
-              placeholder="e.g., Indian Leopard"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
-            />
-          </div>
-
-          {/* Individual count */}
-          <div>
-            <label htmlFor="count" className="mb-1 block text-sm font-medium text-gray-700">
-              Individual Count
-            </label>
-            <input
-              id="count"
-              type="number"
-              min={1}
-              value={individualCount}
-              onChange={e => setIndividualCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-24 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">
-              Notes
-            </label>
+          <div style={{
+            margin: '0 22px', padding: '16px 0 24px',
+            borderTop: `0.5px solid ${DS.inkHair}`,
+          }}>
+            <Mono size={9} letter={0.2} color={DS.inkSoft} style={{ marginBottom: 8 }}>Notes</Mono>
             <textarea
-              id="notes"
-              rows={3}
               value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Behavior, habitat details, weather..."
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-tipai-500 focus:outline-none focus:ring-1 focus:ring-tipai-500"
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Further observations…"
+              style={{
+                width: '100%', minHeight: 80, background: 'transparent',
+                border: 'none', outline: 'none', resize: 'none',
+                fontFamily: DS.serif, fontSize: 16, fontWeight: 300, fontStyle: 'italic',
+                color: DS.ink, lineHeight: '24px',
+                padding: '2px 0 0',
+                backgroundImage: `repeating-linear-gradient(to bottom, transparent 0 23px, rgba(28,37,32,0.12) 23px 24px)`,
+                backgroundSize: '100% 24px',
+              }}
             />
           </div>
 
-          {/* Error */}
-          {submitError && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              {submitError}
-            </div>
-          )}
+          <div style={{ height: 120 }} />
+        </div>
 
-          {/* Submit */}
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-tipai-700 py-3.5 text-sm font-semibold text-white shadow-lg shadow-tipai-900/20 transition hover:bg-tipai-800 active:scale-[0.98] disabled:opacity-50"
-          >
-            {submitting ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                {navigator.onLine ? 'Submit Sighting' : 'Save Offline'}
-              </>
-            )}
+        <div style={{ padding: '14px 20px 32px', borderTop: `0.5px solid ${DS.inkHair}`, background: DS.ivory }}>
+          {submitError && (
+            <div style={{
+              padding: '10px 14px', background: DS.rust, color: DS.ivory,
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.15em',
+              marginBottom: 12, textTransform: 'uppercase',
+            }}>{submitError}</div>
+          )}
+          <button onClick={handleSubmit} disabled={submitting} style={{
+            width: '100%', padding: '18px 20px', background: DS.ochre, color: DS.ink,
+            border: 'none', cursor: 'pointer',
+            fontFamily: DS.mono, fontSize: 12, letterSpacing: '0.3em',
+            textTransform: 'uppercase', fontWeight: 500,
+            opacity: submitting ? 0.5 : 1,
+          }}>
+            {submitting ? 'Sealing…' : 'Seal the entry ⎘'}
           </button>
         </div>
-      )}
-    </div>
-  )
+
+        {picker === 'count' && (
+          <PickerSheet title="Number of individuals" numeric value={count}
+            onChoose={(v) => { setCount(Number(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+        {picker === 'sexAge' && (
+          <PickerSheet title="Sex & age class" options={SEX_AGE} value={sexAge}
+            onChoose={(v) => { setSexAge(String(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+        {picker === 'behaviour' && (
+          <PickerSheet title="Behaviour" options={BEHAVIOURS} value={behaviour}
+            onChoose={(v) => { setBehaviour(String(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+        {picker === 'habitat' && (
+          <PickerSheet title="Habitat" options={HABITATS} value={habitat}
+            onChoose={(v) => { setHabitat(String(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+        {picker === 'weather' && (
+          <PickerSheet title="Weather" options={WEATHERS} value={weather}
+            onChoose={(v) => { setWeather(String(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+        {picker === 'confidence' && (
+          <PickerSheet title="Confidence" options={CONFIDENCE} value={confidence}
+            onChoose={(v) => { setConfidence(String(v)); setPicker(null); }}
+            onClose={() => setPicker(null)} />
+        )}
+      </div>
+    )
+  }
+
+  // ─── Step: Sealed (success) ───────────────────────────────────────
+
+  if (step === 'sealed') {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: DS.ivory,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '0 40px', gap: 28,
+      }}>
+        <div style={{
+          width: 140, height: 140, borderRadius: 70,
+          background: `radial-gradient(circle at 38% 38%, ${DS.ochre} 0%, #8a6d3e 85%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 8px 24px rgba(138,109,62,0.3)`,
+          animation: 'animate-seal-in 700ms cubic-bezier(0.16, 1, 0.3, 1)',
+        }}>
+          <div style={{ textAlign: 'center', color: DS.ink, zIndex: 1 }}>
+            <div style={{ fontFamily: DS.serif, fontSize: 32, fontWeight: 300, fontStyle: 'italic' }}>WL</div>
+            <Mono size={7} letter={0.25} style={{ marginTop: 4 }}>№ 0001</Mono>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+          <Mono size={10} letter={0.25} color={DS.ochre} style={{ marginBottom: 12 }}>Entry sealed</Mono>
+          <h2 style={{
+            fontFamily: DS.serif, fontSize: 32, fontWeight: 300,
+            letterSpacing: '-0.02em', color: DS.ink, lineHeight: 1.1,
+          }}>
+            {selectedSpecies?.common_name || 'Unidentified'}<br />
+            <em style={{ fontWeight: 300, color: DS.inkSoft }}>has been entered into the logbook.</em>
+          </h2>
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
