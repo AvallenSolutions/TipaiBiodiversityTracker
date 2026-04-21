@@ -310,20 +310,25 @@ export default function NewSightingPage() {
             </div>
           ) : aiSuggestions.length > 0 ? (
             <>
-              <button onClick={() => { setSelectedSpecies(aiSuggestions[0]); setStep('entry'); }} style={{
-                textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '20px 0 22px', borderBottom: `0.5px solid ${DS.inkHair}`,
-              }}>
-                <Mono size={9} letter={0.2} color={DS.inkSoft}>MAM · PRIMARY</Mono>
-                <div style={{
-                  fontFamily: DS.serif, fontSize: 36, fontWeight: 300,
-                  color: DS.ink, letterSpacing: '-0.02em', lineHeight: 1, marginTop: 8,
-                }}>{aiSuggestions[0].common_name}</div>
-                <div style={{
-                  fontFamily: DS.serif, fontSize: 16, fontStyle: 'italic',
-                  fontWeight: 300, color: DS.inkSoft, marginTop: 4,
-                }}>{aiSuggestions[0].scientific_name}</div>
-              </button>
+              {(() => {
+                const primary = aiSuggestions[0] ?? null
+                return primary ? (
+                  <button onClick={() => { setSelectedSpecies(primary); setStep('entry'); }} style={{
+                    textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+                    padding: '20px 0 22px', borderBottom: `0.5px solid ${DS.inkHair}`,
+                  }}>
+                    <Mono size={9} letter={0.2} color={DS.inkSoft}>MAM · PRIMARY</Mono>
+                    <div style={{
+                      fontFamily: DS.serif, fontSize: 36, fontWeight: 300,
+                      color: DS.ink, letterSpacing: '-0.02em', lineHeight: 1, marginTop: 8,
+                    }}>{primary.common_name}</div>
+                    <div style={{
+                      fontFamily: DS.serif, fontSize: 16, fontStyle: 'italic',
+                      fontWeight: 300, color: DS.inkSoft, marginTop: 4,
+                    }}>{primary.scientific_name}</div>
+                  </button>
+                ) : null
+              })()}
 
               <button onClick={() => { setSelectedSpecies(null); setStep('entry'); }} style={{
                 background: 'transparent', border: 'none', padding: '16px 0 24px',
