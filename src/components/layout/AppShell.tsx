@@ -102,7 +102,7 @@ export default function AppShell() {
       {!isFullBleed && (
         <header style={{
           background: DS.paper,
-          padding: '14px 20px 0',
+          padding: 'max(14px, env(safe-area-inset-top)) 20px 0',
           position: 'sticky', top: 0, zIndex: 40,
           borderBottom: `1px solid ${DS.ink}`,
         }}>
@@ -138,7 +138,7 @@ export default function AppShell() {
       )}
 
       {/* Content */}
-      <main style={{ paddingBottom: isFullBleed ? 0 : 88 }}>
+      <main style={{ paddingBottom: isFullBleed ? 0 : 'calc(88px + env(safe-area-inset-bottom))' }}>
         <Outlet />
       </main>
 
@@ -148,6 +148,7 @@ export default function AppShell() {
           position: 'fixed', bottom: 0, left: 0, right: 0,
           background: DS.ivory, borderTop: `1px solid ${DS.ink}`,
           zIndex: 40,
+          paddingBottom: 'env(safe-area-inset-bottom)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-around', padding: '10px 0 14px' }}>
             {allNav.map(item => {
