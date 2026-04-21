@@ -33,7 +33,7 @@ If you cannot identify anything, return a single entry with confidence 0 and spe
 Return ONLY the JSON array, no other text.`
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
