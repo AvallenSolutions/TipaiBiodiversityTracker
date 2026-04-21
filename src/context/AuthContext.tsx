@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
+        emailRedirectTo: window.location.origin,
         data: { display_name: displayName, role },
       },
     })
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        emailRedirectTo: window.location.origin,
         data: { display_name: email.split('@')[0], role: 'guest' },
       },
     })

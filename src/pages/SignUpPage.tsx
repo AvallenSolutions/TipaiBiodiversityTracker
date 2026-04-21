@@ -1,8 +1,24 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { Leaf, Loader2, CheckCircle } from 'lucide-react'
+import { DS } from '@/lib/ledger-design'
+import { Mono } from '@/components/logger/shared'
 import type { UserRole } from '@/types'
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  fontFamily: '"Inter Tight", system-ui, sans-serif',
+  fontSize: 15,
+  padding: '8px 0',
+  borderBottom: `1px solid ${DS.ink}`,
+  borderTop: 'none',
+  borderLeft: 'none',
+  borderRight: 'none',
+  background: 'transparent',
+  color: DS.ink,
+  outline: 'none',
+  boxSizing: 'border-box',
+}
 
 export default function SignUpPage() {
   const { signUp } = useAuth()
@@ -30,13 +46,56 @@ export default function SignUpPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-tipai-50 to-tipai-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-          <CheckCircle className="mx-auto h-14 w-14 text-green-600 mb-4" />
-          <h2 className="text-xl font-bold text-gray-900">Account Created</h2>
-          <p className="text-gray-600 mt-2">Check your email to verify your account, then sign in.</p>
-          <Link to="/login" className="mt-6 inline-block bg-tipai-700 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-tipai-800">
-            Go to Login
+      <div style={{
+        minHeight: '100dvh',
+        background: DS.paper,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 20px',
+      }}>
+        <div style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
+          <div style={{
+            borderTop: `3px double ${DS.ink}`,
+            paddingTop: 16,
+            marginBottom: 32,
+          }}>
+            <Mono size={9} letter={0.22} color={DS.ochre}>◆ Account created</Mono>
+          </div>
+          <h2 style={{
+            fontFamily: DS.serif,
+            fontSize: 32,
+            fontWeight: 300,
+            letterSpacing: '-0.02em',
+            color: DS.ink,
+            margin: '0 0 16px',
+          }}>
+            Welcome to the field.
+          </h2>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 15,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            lineHeight: 1.55,
+            margin: '0 0 32px',
+          }}>
+            Check your email to verify your account, then sign in to begin logging.
+          </p>
+          <Link to="/login" style={{
+            display: 'inline-block',
+            fontFamily: DS.serif,
+            fontSize: 16,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.ivory,
+            background: DS.ink,
+            padding: '12px 32px',
+            textDecoration: 'none',
+          }}>
+            Go to Sign In →
           </Link>
         </div>
       </div>
@@ -44,74 +103,161 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-50 to-tipai-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-6">
-        <div className="text-center">
-          <Leaf className="mx-auto h-14 w-14 text-tipai-700" />
-          <h1 className="mt-4 text-3xl font-bold text-tipai-900">Create Account</h1>
+    <div style={{
+      minHeight: '100dvh',
+      background: DS.paper,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px 20px',
+    }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+
+        {/* Masthead */}
+        <div style={{
+          borderTop: `3px double ${DS.ink}`,
+          paddingTop: 16,
+          marginBottom: 40,
+          textAlign: 'center',
+        }}>
+          <Mono size={9} letter={0.22} color={DS.ochre}>◆ Wildlife Luxuries / Tipai</Mono>
+          <h1 style={{
+            fontFamily: DS.serif,
+            fontSize: 36,
+            fontWeight: 300,
+            letterSpacing: '-0.02em',
+            margin: '8px 0 4px',
+            color: DS.ink,
+          }}>
+            Join the Journal
+          </h1>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 15,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            margin: 0,
+          }}>
+            Create your field account.
+          </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
-          )}
+        {/* Error */}
+        {error && (
+          <div style={{
+            padding: '8px 12px',
+            background: DS.rust,
+            color: DS.ivory,
+            fontFamily: DS.mono,
+            fontSize: 10,
+            letterSpacing: '0.05em',
+            marginBottom: 20,
+          }}>
+            {error}
+          </div>
+        )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input
-                type="text"
-                required
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                minLength={6}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-              <select
-                value={role}
-                onChange={e => setRole(e.target.value as UserRole)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-              >
-                <option value="staff">Staff</option>
-                <option value="naturalist">Naturalist</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-tipai-700 text-white py-2.5 rounded-lg font-semibold hover:bg-tipai-800 disabled:opacity-50 flex items-center justify-center gap-2"
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 24 }}>
+            <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Full name</Mono>
+            <input
+              type="text"
+              required
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="Your name"
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Email address</Mono>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="your.name@example.com"
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Password</Mono>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Min. 6 characters"
+              minLength={6}
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{ marginBottom: 36 }}>
+            <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Role</Mono>
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value as UserRole)}
+              style={{
+                ...inputStyle,
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                cursor: 'pointer',
+              }}
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Create Account
-            </button>
-            <p className="text-center text-sm text-gray-600">
-              Already have an account? <Link to="/login" className="text-tipai-700 font-medium hover:underline">Sign In</Link>
-            </p>
-          </form>
+              <option value="staff">Staff</option>
+              <option value="naturalist">Naturalist</option>
+            </select>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              fontFamily: DS.serif,
+              fontSize: 16,
+              fontStyle: 'italic',
+              fontWeight: 300,
+              color: DS.ivory,
+              background: loading ? DS.inkSoft : DS.ink,
+              border: 'none',
+              padding: '14px 0',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.01em',
+              transition: 'background 0.15s',
+            }}
+          >
+            {loading ? '⋯ Creating account' : 'Create Account →'}
+          </button>
+        </form>
+
+        {/* Footer */}
+        <div style={{
+          marginTop: 36,
+          paddingTop: 20,
+          borderTop: `0.5px solid ${DS.inkHair}`,
+          textAlign: 'center',
+        }}>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 13,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            margin: 0,
+          }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: DS.ink, textDecoration: 'underline' }}>
+              Sign in
+            </Link>
+          </p>
         </div>
+
       </div>
     </div>
   )
