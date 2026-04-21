@@ -57,13 +57,11 @@ export default function NewSightingPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // iOS (Chrome, Firefox, all browsers) must use the native file picker —
-  // getUserMedia in non-Safari browsers on iOS is unreliable due to WebKit
-  // permission gating per browser app. File input capture="environment"
-  // uses the OS camera directly and always works.
+  // iOS (all browsers) must use the native file picker — getUserMedia is blocked
+  // per-app by iOS. <label htmlFor> triggers the input as a native tap (not JS
+  // .click()), which iOS allows; programmatic .click() from another element is blocked.
   const useNativeCapture = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
   const stopStream = useCallback(() => {
@@ -123,11 +121,8 @@ export default function NewSightingPage() {
     const file = e.target.files?.[0]
     if (!file) return
     commitBlob(file)
-    // Reset so the same file can be re-selected if needed
     e.target.value = ''
   }
-
-  const triggerNativeCamera = () => fileInputRef.current?.click()
 
   useEffect(() => {
     if (step === 'camera') {
@@ -249,70 +244,58 @@ export default function NewSightingPage() {
   if (step === 'camera') {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#000',
-        display: 'flex', flexDirection: 'column',
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: '#000', display: 'flex', flexDirection: 'column',
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
-        {/* Viewfinder / native-camera placeholder */}
+        {/* Viewfinder area */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-
           {useNativeCapture ? (
-            /* iOS: tap-to-shoot placeholder */
-            <button
-              onClick={triggerNativeCamera}
-              style={{
-                width: '100%', height: '100%', background: '#111',
-                border: 'none', cursor: 'pointer',
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 16,
-              }}
-            >
+            /* iOS: decorative placeholder only — NOT a button (avoids double trigger).
+               The shutter label below is the sole tap target. */
+            <div style={{
+              width: '100%', height: '100%', background: '#111',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 16,
+            }}>
               <div style={{
-                width: 72, height: 72, borderRadius: 36,
-                border: `1.5px solid rgba(255,255,255,0.4)`,
+                width: 64, height: 64, borderRadius: 32,
+                border: `1px solid rgba(255,255,255,0.18)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <div style={{ width: 56, height: 56, borderRadius: 28, background: 'rgba(255,255,255,0.15)' }} />
+                <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(255,255,255,0.07)' }} />
               </div>
-              <Mono size={9} color="rgba(255,255,255,0.5)" letter={0.22}>
-                Tap to open camera
+              <Mono size={9} color="rgba(255,255,255,0.3)" letter={0.22}>
+                Select category · tap shutter to photograph
               </Mono>
-            </button>
+            </div>
           ) : (
-            /* Non-iOS: live getUserMedia viewfinder */
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           )}
 
           {/* HUD */}
           <div style={{
             position: 'absolute', top: 16, left: 0, right: 0, padding: '0 20px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            pointerEvents: 'none',
           }}>
-            <div style={{ pointerEvents: 'auto' }}>
-              <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
-              </button>
-            </div>
+            <button onClick={() => navigate(-1)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
+            </button>
             {!useNativeCapture && <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>}
             <Mono size={9} color="rgba(255,255,255,0.4)" letter={0.22}>
               {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
             </Mono>
           </div>
 
-          {/* getUserMedia error (non-iOS only) */}
+          {/* getUserMedia error (non-iOS) */}
           {cameraError && !useNativeCapture && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
               alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
-              padding: 32, gap: 16, background: 'rgba(0,0,0,0.8)',
+              padding: 32, gap: 16, background: 'rgba(0,0,0,0.85)',
             }}>
               <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
                 {cameraError}
@@ -321,9 +304,7 @@ export default function NewSightingPage() {
                 background: DS.ivory, color: DS.ink, border: 'none',
                 fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
                 padding: '10px 20px', cursor: 'pointer', textTransform: 'uppercase',
-              }}>
-                Retry
-              </button>
+              }}>Retry</button>
             </div>
           )}
         </div>
@@ -331,57 +312,47 @@ export default function NewSightingPage() {
         {/* Category strip */}
         <div style={{
           background: '#000', padding: '12px 20px 0',
-          display: 'flex', gap: 8, overflowX: 'auto',
-          scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+          display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
         } as React.CSSProperties}>
           {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              style={{
-                flexShrink: 0,
-                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: category === cat ? DS.ink : DS.ivory,
-                background: category === cat ? DS.ochre : 'rgba(255,255,255,0.12)',
-                border: category === cat ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
-                padding: '6px 12px', cursor: 'pointer',
-              }}
-            >
-              {cat}
-            </button>
+            <button key={cat} onClick={() => setCategory(cat)} style={{
+              flexShrink: 0,
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase',
+              color: category === cat ? DS.ink : DS.ivory,
+              background: category === cat ? DS.ochre : 'rgba(255,255,255,0.12)',
+              border: category === cat ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
+              padding: '6px 12px', cursor: 'pointer',
+            }}>{cat}</button>
           ))}
         </div>
 
         {/* Shutter row */}
-        <div style={{ padding: '16px 0 24px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 40 }}>
-          <div style={{ width: 40 }} />
-          <button
-            onClick={useNativeCapture ? triggerNativeCamera : handleCapture}
-            disabled={!useNativeCapture && !!cameraError}
-            style={{
+        <div style={{ padding: '16px 0 24px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          {useNativeCapture ? (
+            /* label wrapping the shutter so iOS sees a direct native tap on the input,
+               not a programmatic .click() — iOS blocks the latter on file inputs */
+            <label htmlFor="native-camera-input" style={{
               width: 76, height: 76, borderRadius: 38,
               border: `1.5px solid ${DS.ivory}`,
-              background: 'none',
-              cursor: (!useNativeCapture && cameraError) ? 'not-allowed' : 'pointer',
-              position: 'relative',
-              opacity: (!useNativeCapture && cameraError) ? 0.3 : 1,
-            }}
-          >
-            <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
-          </button>
-          <div style={{ width: 40 }} />
+              background: 'none', cursor: 'pointer',
+              position: 'relative', display: 'block',
+            }}>
+              <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
+            </label>
+          ) : (
+            <button onClick={handleCapture} disabled={!!cameraError} style={{
+              width: 76, height: 76, borderRadius: 38,
+              border: `1.5px solid ${DS.ivory}`,
+              background: 'none', cursor: cameraError ? 'not-allowed' : 'pointer',
+              position: 'relative', opacity: cameraError ? 0.3 : 1,
+            }}>
+              <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
+            </button>
+          )}
         </div>
 
-        {/* Hidden file input for native camera (iOS + fallback) */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-        />
+        <input id="native-camera-input" type="file" accept="image/*" capture="environment"
+          onChange={handleFileSelect} style={{ display: 'none' }} />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
     )
@@ -392,7 +363,7 @@ export default function NewSightingPage() {
   if (step === 'identifying') {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#0b0e0c', color: DS.ivory,
+        position: 'fixed', inset: 0, zIndex: 100, background: '#0b0e0c', color: DS.ivory,
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -413,7 +384,7 @@ export default function NewSightingPage() {
   if (step === 'identify') {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#0b0e0c',
+        position: 'fixed', inset: 0, zIndex: 100, background: '#0b0e0c',
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: DS.bone, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -493,7 +464,7 @@ export default function NewSightingPage() {
 
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: DS.ivory,
+        position: 'fixed', inset: 0, zIndex: 100, background: DS.ivory,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{
@@ -616,7 +587,7 @@ export default function NewSightingPage() {
   if (step === 'sealed') {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: DS.ivory,
+        position: 'fixed', inset: 0, zIndex: 100, background: DS.ivory,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: '0 40px', gap: 28,
       }}>
