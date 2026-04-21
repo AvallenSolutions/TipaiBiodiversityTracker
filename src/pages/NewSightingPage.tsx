@@ -327,18 +327,28 @@ export default function NewSightingPage() {
         </div>
 
         {/* Shutter row */}
-        <div style={{ padding: '16px 0 24px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{
+          padding: '16px 0 20px', background: '#000',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+        }}>
           {useNativeCapture ? (
-            /* label wrapping the shutter so iOS sees a direct native tap on the input,
-               not a programmatic .click() — iOS blocks the latter on file inputs */
-            <label htmlFor="native-camera-input" style={{
-              width: 76, height: 76, borderRadius: 38,
-              border: `1.5px solid ${DS.ivory}`,
-              background: 'none', cursor: 'pointer',
-              position: 'relative', display: 'block',
-            }}>
-              <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
-            </label>
+            /* label wrapping the shutter: iOS allows label taps to trigger the
+               file input (programmatic .click() is blocked). No capture attr so
+               iOS shows the system action sheet — Photo Library / Take Photo /
+               Choose File — which uses system-level camera, not Chrome's perm. */
+            <>
+              <label htmlFor="native-camera-input" style={{
+                width: 76, height: 76, borderRadius: 38,
+                border: `1.5px solid ${DS.ivory}`,
+                background: 'none', cursor: 'pointer',
+                position: 'relative', display: 'block',
+              }}>
+                <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
+              </label>
+              <Mono size={9} color="rgba(255,255,255,0.35)" letter={0.22} style={{ textAlign: 'center' }}>
+                Take photo or choose from library
+              </Mono>
+            </>
           ) : (
             <button onClick={handleCapture} disabled={!!cameraError} style={{
               width: 76, height: 76, borderRadius: 38,
@@ -351,7 +361,11 @@ export default function NewSightingPage() {
           )}
         </div>
 
-        <input id="native-camera-input" type="file" accept="image/*" capture="environment"
+        {/* No capture attr: iOS shows Photo Library / Take Photo / Choose File
+            action sheet. The "Take Photo" path uses system camera (not browser's
+            per-app camera permission), avoiding the black-screen issue that hits
+            when Chrome iOS doesn't have camera permission granted. */}
+        <input id="native-camera-input" type="file" accept="image/*"
           onChange={handleFileSelect} style={{ display: 'none' }} />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
