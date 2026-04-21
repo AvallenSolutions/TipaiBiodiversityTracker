@@ -59,14 +59,14 @@ export default function NewSightingPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // iOS (all browsers) uses the native file picker — getUserMedia in WKWebView
-  // is unreliable, and programmatic .click() on file inputs is blocked. Chrome
-  // iOS specifically has broken camera capture (WKWebView routes camera through
-  // Chrome's own permission which is unreliable → black screen). We detect it
-  // so we can tell the user to switch to Safari.
+  // Chrome iOS (WKWebView) can't reliably open the camera via any API — we show
+  // an overlay directing those users to Safari. Safari iOS fully supports
+  // getUserMedia in PWA standalone mode with a one-time permission dialog.
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const isChromeIOS = isIOS && /CriOS/.test(navigator.userAgent)
-  const useNativeCapture = isIOS
+  // Only Chrome iOS falls back to file input (library only — camera is broken).
+  // Safari iOS and all other platforms use getUserMedia for the live viewfinder.
+  const useNativeCapture = isChromeIOS
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -253,31 +253,10 @@ export default function NewSightingPage() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
-        {/* Viewfinder area */}
+        {/* Viewfinder — always a live video; Chrome iOS shows overlay on top */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {useNativeCapture ? (
-            /* iOS: decorative placeholder only — NOT a button (avoids double trigger).
-               The shutter label below is the sole tap target. */
-            <div style={{
-              width: '100%', height: '100%', background: '#111',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 16,
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: 32,
-                border: `1px solid rgba(255,255,255,0.18)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <div style={{ width: 48, height: 48, borderRadius: 24, background: 'rgba(255,255,255,0.07)' }} />
-              </div>
-              <Mono size={9} color="rgba(255,255,255,0.3)" letter={0.22}>
-                Select category · tap shutter to photograph
-              </Mono>
-            </div>
-          ) : (
-            <video ref={videoRef} autoPlay playsInline muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          )}
+          <video ref={videoRef} autoPlay playsInline muted
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
           {/* HUD */}
           <div style={{
@@ -288,14 +267,14 @@ export default function NewSightingPage() {
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
               <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
             </button>
-            {!useNativeCapture && <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>}
+            <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>
             <Mono size={9} color="rgba(255,255,255,0.4)" letter={0.22}>
               {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
             </Mono>
           </div>
 
-          {/* getUserMedia error (non-iOS) */}
-          {cameraError && !useNativeCapture && (
+          {/* getUserMedia error */}
+          {cameraError && !isChromeIOS && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
               alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
@@ -377,25 +356,23 @@ export default function NewSightingPage() {
           padding: '16px 0 20px', background: '#000',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         }}>
-          {useNativeCapture ? (
-            /* label wrapping the shutter: iOS allows label taps to trigger the
-               file input (programmatic .click() is blocked). No capture attr so
-               iOS shows the system action sheet — Photo Library / Take Photo /
-               Choose File — which uses system-level camera, not Chrome's perm. */
+          {isChromeIOS ? (
+            /* Chrome iOS can't take photos — shutter opens Photo Library only */
             <>
               <label htmlFor="native-camera-input" style={{
                 width: 76, height: 76, borderRadius: 38,
-                border: `1.5px solid ${DS.ivory}`,
+                border: `1.5px solid rgba(255,255,255,0.4)`,
                 background: 'none', cursor: 'pointer',
                 position: 'relative', display: 'block',
               }}>
-                <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
+                <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.4)' }} />
               </label>
-              <Mono size={9} color="rgba(255,255,255,0.35)" letter={0.22} style={{ textAlign: 'center' }}>
-                Take photo or choose from library
+              <Mono size={9} color="rgba(255,255,255,0.3)" letter={0.22} style={{ textAlign: 'center' }}>
+                Choose from library
               </Mono>
             </>
           ) : (
+            /* getUserMedia path: direct canvas capture, one tap */
             <button onClick={handleCapture} disabled={!!cameraError} style={{
               width: 76, height: 76, borderRadius: 38,
               border: `1.5px solid ${DS.ivory}`,
@@ -407,10 +384,6 @@ export default function NewSightingPage() {
           )}
         </div>
 
-        {/* No capture attr: iOS shows Photo Library / Take Photo / Choose File
-            action sheet. The "Take Photo" path uses system camera (not browser's
-            per-app camera permission), avoiding the black-screen issue that hits
-            when Chrome iOS doesn't have camera permission granted. */}
         <input id="native-camera-input" type="file" accept="image/*"
           onChange={handleFileSelect} style={{ display: 'none' }} />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
