@@ -10,7 +10,7 @@ export async function identifySpecies(
   imageBlob: Blob,
   category: SightingCategory
 ): Promise<AISuggestion[]> {
-  if (!API_KEY) return []
+  if (!API_KEY || !navigator.onLine) return []
 
   const base64 = await blobToBase64(imageBlob)
   const base64Data = base64.split(',')[1]
@@ -33,7 +33,7 @@ If you cannot identify anything, return a single entry with confidence 0 and spe
 Return ONLY the JSON array, no other text.`
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent?key=${API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
