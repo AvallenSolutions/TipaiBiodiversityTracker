@@ -77,7 +77,7 @@ Return ONLY the JSON array, no other text.`
     scientific_name: null,
     confidence: 0,
     description: text,
-    category,
+    category: category ?? undefined,
   }]
 }
 
