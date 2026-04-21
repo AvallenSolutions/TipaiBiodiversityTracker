@@ -57,7 +57,14 @@ export default function NewSightingPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
+
+  // iOS (Chrome, Firefox, all browsers) must use the native file picker —
+  // getUserMedia in non-Safari browsers on iOS is unreliable due to WebKit
+  // permission gating per browser app. File input capture="environment"
+  // uses the OS camera directly and always works.
+  const useNativeCapture = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -67,6 +74,7 @@ export default function NewSightingPage() {
   }, [])
 
   const startCamera = useCallback(async () => {
+    if (useNativeCapture) return   // handled by file input, no getUserMedia needed
     setCameraError(null)
     stopStream()
     const attach = (stream: MediaStream) => {
@@ -78,14 +86,12 @@ export default function NewSightingPage() {
       }
     }
     try {
-      // ideal (not exact) so mobile doesn't throw when rear cam is unavailable
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       })
       attach(stream)
     } catch {
-      // fallback: any camera
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         attach(stream)
@@ -93,26 +99,35 @@ export default function NewSightingPage() {
         setCameraError(err.message || 'Camera access denied')
       }
     }
-  }, [stopStream])
+  }, [stopStream, useNativeCapture])
+
+  // Used by both the canvas capture (non-iOS) and native file input (iOS)
+  const commitBlob = useCallback((blob: Blob) => {
+    setCapturedMedia(prev => [...prev, { blob, type: 'photo' }])
+    setStep('identifying')
+  }, [])
 
   const handleCapture = () => {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
     ctx.drawImage(video, 0, 0)
-    canvas.toBlob(blob => {
-      if (blob) {
-        setCapturedMedia(prev => [...prev, { blob, type: 'photo' }])
-        setStep('identifying')
-      }
-    }, 'image/jpeg', 0.85)
+    canvas.toBlob(blob => { if (blob) commitBlob(blob) }, 'image/jpeg', 0.85)
   }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    commitBlob(file)
+    // Reset so the same file can be re-selected if needed
+    e.target.value = ''
+  }
+
+  const triggerNativeCamera = () => fileInputRef.current?.click()
 
   useEffect(() => {
     if (step === 'camera') {
@@ -239,49 +254,74 @@ export default function NewSightingPage() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
-        {/* Viewfinder */}
+        {/* Viewfinder / native-camera placeholder */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          />
+
+          {useNativeCapture ? (
+            /* iOS: tap-to-shoot placeholder */
+            <button
+              onClick={triggerNativeCamera}
+              style={{
+                width: '100%', height: '100%', background: '#111',
+                border: 'none', cursor: 'pointer',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 16,
+              }}
+            >
+              <div style={{
+                width: 72, height: 72, borderRadius: 36,
+                border: `1.5px solid rgba(255,255,255,0.4)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{ width: 56, height: 56, borderRadius: 28, background: 'rgba(255,255,255,0.15)' }} />
+              </div>
+              <Mono size={9} color="rgba(255,255,255,0.5)" letter={0.22}>
+                Tap to open camera
+              </Mono>
+            </button>
+          ) : (
+            /* Non-iOS: live getUserMedia viewfinder */
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          )}
 
           {/* HUD */}
           <div style={{
             position: 'absolute', top: 16, left: 0, right: 0, padding: '0 20px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            pointerEvents: 'none',
           }}>
-            <button
-              onClick={() => navigate(-1)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
-            </button>
-            <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>
-            <Mono size={9} color="rgba(255,255,255,0.5)" letter={0.22}>
+            <div style={{ pointerEvents: 'auto' }}>
+              <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
+              </button>
+            </div>
+            {!useNativeCapture && <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>}
+            <Mono size={9} color="rgba(255,255,255,0.4)" letter={0.22}>
               {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
             </Mono>
           </div>
 
-          {/* Camera error */}
-          {cameraError && (
+          {/* getUserMedia error (non-iOS only) */}
+          {cameraError && !useNativeCapture && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
               alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
-              padding: 24, gap: 16,
+              padding: 32, gap: 16, background: 'rgba(0,0,0,0.8)',
             }}>
-              <Mono size={9} color={DS.rust} letter={0.22}>{cameraError}</Mono>
-              <button
-                onClick={startCamera}
-                style={{
-                  background: DS.ivory, color: DS.ink, border: 'none',
-                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
-                  padding: '10px 20px', cursor: 'pointer', textTransform: 'uppercase',
-                }}
-              >
+              <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
+                {cameraError}
+              </Mono>
+              <button onClick={startCamera} style={{
+                background: DS.ivory, color: DS.ink, border: 'none',
+                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
+                padding: '10px 20px', cursor: 'pointer', textTransform: 'uppercase',
+              }}>
                 Retry
               </button>
             </div>
@@ -305,8 +345,7 @@ export default function NewSightingPage() {
                 color: category === cat ? DS.ink : DS.ivory,
                 background: category === cat ? DS.ochre : 'rgba(255,255,255,0.12)',
                 border: category === cat ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
-                padding: '6px 12px',
-                cursor: 'pointer',
+                padding: '6px 12px', cursor: 'pointer',
               }}
             >
               {cat}
@@ -318,23 +357,31 @@ export default function NewSightingPage() {
         <div style={{ padding: '16px 0 24px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 40 }}>
           <div style={{ width: 40 }} />
           <button
-            onClick={handleCapture}
-            disabled={!!cameraError}
+            onClick={useNativeCapture ? triggerNativeCamera : handleCapture}
+            disabled={!useNativeCapture && !!cameraError}
             style={{
               width: 76, height: 76, borderRadius: 38,
               border: `1.5px solid ${DS.ivory}`,
-              background: 'none', cursor: cameraError ? 'not-allowed' : 'pointer',
-              position: 'relative', opacity: cameraError ? 0.3 : 1,
+              background: 'none',
+              cursor: (!useNativeCapture && cameraError) ? 'not-allowed' : 'pointer',
+              position: 'relative',
+              opacity: (!useNativeCapture && cameraError) ? 0.3 : 1,
             }}
           >
-            <div style={{
-              position: 'absolute', inset: 6, borderRadius: '50%',
-              background: DS.ivory,
-            }} />
+            <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
           </button>
           <div style={{ width: 40 }} />
         </div>
 
+        {/* Hidden file input for native camera (iOS + fallback) */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
     )
