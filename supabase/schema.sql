@@ -138,23 +138,41 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_role user_role := 'guest';
+  v_display_name TEXT;
+  v_email TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, email, display_name, role)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.email, ''),
-    COALESCE(
-      NEW.raw_user_meta_data->>'display_name',
-      split_part(COALESCE(NEW.email, ''), '@', 1)
-    ),
-    COALESCE(
+  v_email := COALESCE(NEW.email, '');
+
+  BEGIN
+    v_role := COALESCE(
       (NEW.raw_user_meta_data->>'role')::user_role,
       'guest'
-    )
+    );
+  EXCEPTION WHEN OTHERS THEN
+    v_role := 'guest';
+  END;
+
+  v_display_name := COALESCE(
+    NULLIF(NEW.raw_user_meta_data->>'display_name', ''),
+    NULLIF(split_part(v_email, '@', 1), ''),
+    'Observer'
   );
+
+  INSERT INTO public.profiles (id, email, display_name, role)
+  VALUES (NEW.id, v_email, v_display_name, v_role)
+  ON CONFLICT (id) DO UPDATE
+    SET email = EXCLUDED.email,
+        display_name = COALESCE(public.profiles.display_name, EXCLUDED.display_name),
+        role = CASE
+                 WHEN public.profiles.role = 'guest' THEN EXCLUDED.role
+                 ELSE public.profiles.role
+               END;
+
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
-  RAISE LOG 'handle_new_user failed: % %', SQLERRM, SQLSTATE;
+  RAISE LOG 'handle_new_user failed for %: % %', NEW.id, SQLERRM, SQLSTATE;
   RETURN NEW;
 END;
 $$;
