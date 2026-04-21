@@ -143,12 +143,17 @@ export default function NewSightingPage() {
           setAiLoading(true)
           identifySpecies(photo.blob, category)
             .then(setAiSuggestions)
-            .catch(() => setAiSuggestions([]))
+            .catch(err => {
+              console.error('[identifySpecies] failed', err)
+              setAiSuggestions([])
+            })
             .finally(() => {
               setAiLoading(false)
               setStep('identify')
             })
         } else {
+          if (!isGeminiAvailable()) console.warn('[identify] Gemini unavailable — VITE_GEMINI_API_KEY missing')
+          if (!category) console.warn('[identify] no category selected — skipping AI')
           setStep('identify')
         }
       }, 800)

@@ -53,11 +53,14 @@ Return ONLY the JSON array, no other text.`
   )
 
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
+    const body = await response.text().catch(() => '')
+    console.error('[Gemini] API error', response.status, response.statusText, body)
+    throw new Error(`Gemini API error: ${response.status} ${response.statusText} — ${body.slice(0, 200)}`)
   }
 
   const data = await response.json()
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]'
+  if (!data.candidates?.length) console.warn('[Gemini] empty candidates', data)
 
   const jsonMatch = text.match(/\[[\s\S]*\]/)
   if (jsonMatch) {
