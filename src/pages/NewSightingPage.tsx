@@ -24,6 +24,7 @@ const HABITATS = ['Sal forest', 'Bamboo', 'Grassland', 'Riverine', 'Water body',
 const WEATHERS = ['Clear', 'Overcast', 'Misty', 'Rain', 'After rain', 'Windy', 'Hot', 'Cold']
 const SEX_AGE = ['Adult male', 'Adult female', 'Subadult', 'Juvenile', 'Cub / fawn', 'Mixed group', 'Unknown']
 const CONFIDENCE = ['Certain', 'Likely', 'Uncertain']
+const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace']
 
 export default function NewSightingPage() {
   const navigate = useNavigate()
@@ -68,15 +69,29 @@ export default function NewSightingPage() {
   const startCamera = useCallback(async () => {
     setCameraError(null)
     stopStream()
+    const attach = (stream: MediaStream) => {
+      streamRef.current = stream
+      const v = videoRef.current
+      if (v) {
+        v.srcObject = stream
+        v.play().catch(() => {})
+      }
+    }
     try {
+      // ideal (not exact) so mobile doesn't throw when rear cam is unavailable
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       })
-      streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
-    } catch (err: any) {
-      setCameraError(err.message || 'Camera access denied')
+      attach(stream)
+    } catch {
+      // fallback: any camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        attach(stream)
+      } catch (err: any) {
+        setCameraError(err.message || 'Camera access denied')
+      }
     }
   }, [stopStream])
 
@@ -108,8 +123,8 @@ export default function NewSightingPage() {
 
   useEffect(() => {
     if (step === 'identifying') {
-      setTimeout(() => {
-        const photo = capturedMedia[capturedMedia.length - 1]
+      const photo = capturedMedia[capturedMedia.length - 1]
+      const timer = setTimeout(() => {
         if (photo?.type === 'photo' && isGeminiAvailable() && category) {
           setAiLoading(true)
           identifySpecies(photo.blob, category)
@@ -123,8 +138,9 @@ export default function NewSightingPage() {
           setStep('identify')
         }
       }, 800)
+      return () => clearTimeout(timer)
     }
-  }, [step])
+  }, [step, capturedMedia, category])
 
   useEffect(() => {
     if (step === 'entry') {
@@ -220,27 +236,95 @@ export default function NewSightingPage() {
       <div style={{
         position: 'fixed', inset: 0, background: '#000',
         display: 'flex', flexDirection: 'column',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
+        {/* Viewfinder */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+
+          {/* HUD */}
           <div style={{
-            position: 'absolute', top: 12, left: 0, right: 0, padding: '0 20px',
-            display: 'flex', justifyContent: 'space-between',
+            position: 'absolute', top: 16, left: 0, right: 0, padding: '0 20px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
-            <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
-            <Mono size={9} color={DS.ivory} letter={0.22} style={{ color: DS.ochre }}>● REC</Mono>
-            <Mono size={9} color={DS.ivory} letter={0.22}>Now</Mono>
+            <button
+              onClick={() => navigate(-1)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              <Mono size={9} color={DS.ivory} letter={0.22}>✕ Cancel</Mono>
+            </button>
+            <Mono size={9} color={DS.ochre} letter={0.22}>● REC</Mono>
+            <Mono size={9} color="rgba(255,255,255,0.5)" letter={0.22}>
+              {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+            </Mono>
           </div>
+
+          {/* Camera error */}
+          {cameraError && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+              padding: 24, gap: 16,
+            }}>
+              <Mono size={9} color={DS.rust} letter={0.22}>{cameraError}</Mono>
+              <button
+                onClick={startCamera}
+                style={{
+                  background: DS.ivory, color: DS.ink, border: 'none',
+                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
+                  padding: '10px 20px', cursor: 'pointer', textTransform: 'uppercase',
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
 
-        <div style={{ padding: '20px 0 40px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 40 }}>
-          <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: DS.ivory, cursor: 'pointer', fontSize: 20 }}>←</button>
+        {/* Category strip */}
+        <div style={{
+          background: '#000', padding: '12px 20px 0',
+          display: 'flex', gap: 8, overflowX: 'auto',
+          scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+        } as React.CSSProperties}>
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              style={{
+                flexShrink: 0,
+                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: category === cat ? DS.ink : DS.ivory,
+                background: category === cat ? DS.ochre : 'rgba(255,255,255,0.12)',
+                border: category === cat ? 'none' : '0.5px solid rgba(255,255,255,0.2)',
+                padding: '6px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Shutter row */}
+        <div style={{ padding: '16px 0 24px', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 40 }}>
+          <div style={{ width: 40 }} />
           <button
             onClick={handleCapture}
+            disabled={!!cameraError}
             style={{
               width: 76, height: 76, borderRadius: 38,
               border: `1.5px solid ${DS.ivory}`,
-              background: 'none', cursor: 'pointer', position: 'relative',
+              background: 'none', cursor: cameraError ? 'not-allowed' : 'pointer',
+              position: 'relative', opacity: cameraError ? 0.3 : 1,
             }}
           >
             <div style={{
@@ -250,7 +334,8 @@ export default function NewSightingPage() {
           </button>
           <div style={{ width: 40 }} />
         </div>
-        <canvas ref={canvasRef} className="hidden" />
+
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
     )
   }
@@ -426,7 +511,7 @@ export default function NewSightingPage() {
           <div style={{ height: 120 }} />
         </div>
 
-        <div style={{ padding: '14px 20px 32px', borderTop: `0.5px solid ${DS.inkHair}`, background: DS.ivory }}>
+        <div style={{ padding: '14px 20px max(32px, env(safe-area-inset-bottom))', borderTop: `0.5px solid ${DS.inkHair}`, background: DS.ivory }}>
           {submitError && (
             <div style={{
               padding: '10px 14px', background: DS.rust, color: DS.ivory,
