@@ -137,7 +137,7 @@ export default function SightingDetailPage() {
 
       {/* Category & count */}
       {sighting.individual_count && (
-        <div style({ padding: '12px 0', borderBottom: `1px solid ${DS.ink}`, marginBottom: 24 }}>
+        <div style={{ padding: '12px 0', borderBottom: `1px solid ${DS.ink}`, marginBottom: 24 }}>
           <Mono size={9} letter={0.22} color={DS.inkSoft}>Count</Mono>
           <p style={{ fontFamily: DS.serif, fontSize: 28, fontWeight: 200, margin: '4px 0 0', color: DS.ink, letterSpacing: '-0.03em' }}>
             × {String(sighting.individual_count).padStart(2, '0')}
@@ -186,7 +186,7 @@ export default function SightingDetailPage() {
 
       {/* Notes */}
       {sighting.notes && (
-        <div style({ marginBottom: 24, padding: '14px', background: DS.bone, border: `0.5px solid ${DS.ink}` }}>
+        <div style={{ marginBottom: 24, padding: '14px', background: DS.bone, border: `0.5px solid ${DS.ink}` }}>
           <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 8 }}>Notes</Mono>
           <p style={{
             fontFamily: DS.serif, fontSize: 15, fontWeight: 300,
