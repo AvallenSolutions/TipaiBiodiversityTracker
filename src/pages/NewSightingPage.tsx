@@ -37,6 +37,7 @@ export default function NewSightingPage() {
   const [capturedMedia, setCapturedMedia] = useState<CapturedMedia[]>([])
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([])
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // Entry fields
   const [selectedSpecies, setSelectedSpecies] = useState<AISuggestion | null>(null)
@@ -139,16 +140,24 @@ export default function NewSightingPage() {
     if (step === 'identifying') {
       const photo = capturedMedia[capturedMedia.length - 1]
       const timer = setTimeout(() => {
+        setAiError(null)
         if (photo?.type === 'photo' && isGeminiAvailable() && category) {
           setAiLoading(true)
           identifySpecies(photo.blob, category)
             .then(setAiSuggestions)
-            .catch(() => setAiSuggestions([]))
+            .catch(err => {
+              console.error('[identifySpecies] failed', err)
+              setAiError(err?.message || String(err))
+              setAiSuggestions([])
+            })
             .finally(() => {
               setAiLoading(false)
               setStep('identify')
             })
         } else {
+          if (!isGeminiAvailable()) setAiError('VITE_GEMINI_API_KEY not found in env — is it set on Netlify and did you redeploy?')
+          else if (!category) setAiError('No category selected before capture — AI skipped.')
+          else if (!navigator.onLine) setAiError('Offline — AI identification skipped.')
           setStep('identify')
         }
       }, 800)
@@ -439,6 +448,18 @@ export default function NewSightingPage() {
             </div>
             {aiSuggestions[0] && <ConfidenceDial value={normalizeConf(aiSuggestions[0].confidence)} size={48} />}
           </div>
+
+          {aiError && (
+            <div style={{
+              margin: '12px 0', padding: '10px 12px',
+              background: 'rgba(184,90,61,0.08)',
+              border: `0.5px solid ${DS.rust}`,
+            }}>
+              <Mono size={9} color={DS.rust} letter={0.15} style={{ lineHeight: 1.6, wordBreak: 'break-word' }}>
+                AI unavailable: {aiError}
+              </Mono>
+            </div>
+          )}
 
           {aiLoading ? (
             <div style={{ padding: '40px 0', textAlign: 'center' }}>
