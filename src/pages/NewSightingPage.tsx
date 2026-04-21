@@ -59,14 +59,14 @@ export default function NewSightingPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // iOS Safari: use native file picker (getUserMedia works but live preview is
-  // fragile; file input + action sheet is reliable). Chrome iOS (CriOS) gets
-  // getUserMedia — it supports it since iOS 14.3 and shows a proper permission
-  // dialog, whereas the file-input "Take Photo" path silently uses Chrome's
-  // per-app camera permission which may not be granted, causing black screen.
+  // iOS (all browsers) uses the native file picker — getUserMedia in WKWebView
+  // is unreliable, and programmatic .click() on file inputs is blocked. Chrome
+  // iOS specifically has broken camera capture (WKWebView routes camera through
+  // Chrome's own permission which is unreliable → black screen). We detect it
+  // so we can tell the user to switch to Safari.
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const isChromeIOS = isIOS && /CriOS/.test(navigator.userAgent)
-  const useNativeCapture = isIOS && !isChromeIOS
+  const useNativeCapture = isIOS
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -294,7 +294,7 @@ export default function NewSightingPage() {
             </Mono>
           </div>
 
-          {/* getUserMedia error */}
+          {/* getUserMedia error (non-iOS) */}
           {cameraError && !useNativeCapture && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
@@ -302,15 +302,55 @@ export default function NewSightingPage() {
               padding: 32, gap: 16, background: 'rgba(0,0,0,0.85)',
             }}>
               <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
-                {isChromeIOS
-                  ? 'Camera access denied.\n\niOS Settings → Chrome → Camera → Allow\n\nThen tap Retry.'
-                  : cameraError}
+                {cameraError}
               </Mono>
               <button onClick={startCamera} style={{
                 background: DS.ivory, color: DS.ink, border: 'none',
                 fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
                 padding: '10px 20px', cursor: 'pointer', textTransform: 'uppercase',
               }}>Retry</button>
+            </div>
+          )}
+
+          {/* Chrome iOS: camera is broken. Overlay a "switch to Safari" message
+              so users aren't left staring at a black screen. Photo Library still
+              works via the shutter / action sheet below. */}
+          {isChromeIOS && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+              padding: '32px 24px', gap: 18, background: 'rgba(0,0,0,0.92)',
+            }}>
+              <Mono size={9} color={DS.ochre} letter={0.22}>◆ A note on Chrome for iPhone</Mono>
+              <div style={{
+                fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+                lineHeight: 1.25, color: DS.ivory, textAlign: 'center',
+                letterSpacing: '-0.01em', maxWidth: 320,
+              }}>
+                Chrome on iPhone can't open the camera.<br />
+                <em style={{ color: 'rgba(232,226,211,0.65)' }}>Please use Safari.</em>
+              </div>
+              <div style={{
+                fontFamily: DS.serif, fontSize: 14, fontWeight: 300, fontStyle: 'italic',
+                color: 'rgba(232,226,211,0.55)', textAlign: 'center',
+                lineHeight: 1.55, maxWidth: 300,
+              }}>
+                Tap the <span style={{ fontFamily: DS.mono, color: DS.ochre }}>⋯</span> menu
+                in Chrome, then choose <em>"Open in Safari"</em>. Or select from your
+                photo library with the shutter below.
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(window.location.href).catch(() => {})
+                }}
+                style={{
+                  background: 'transparent', color: DS.ivory,
+                  border: `0.5px solid rgba(232,226,211,0.4)`,
+                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+                  padding: '10px 18px', cursor: 'pointer', textTransform: 'uppercase',
+                  marginTop: 4,
+                }}
+              >Copy link</button>
             </div>
           )}
         </div>
