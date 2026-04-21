@@ -8,16 +8,20 @@ export function isGeminiAvailable(): boolean {
 
 export async function identifySpecies(
   imageBlob: Blob,
-  category: SightingCategory
+  category: SightingCategory | null
 ): Promise<AISuggestion[]> {
   if (!API_KEY || !navigator.onLine) return []
 
   const base64 = await blobToBase64(imageBlob)
   const base64Data = base64.split(',')[1]
 
+  const categoryClause = category
+    ? `The user has pre-classified this as a ${category} sighting.`
+    : `Determine which of these categories it belongs to: mammal, bird, reptile, amphibian, insect, plant, fungi, trace (e.g. tracks, scat, nests).`
+
   const prompt = `You are a biodiversity expert specializing in Indian wildlife, particularly species found in forested estates near tiger reserves.
 
-Analyze this image of a ${category} sighting.
+Analyze this image of a wildlife sighting. ${categoryClause}
 
 Return a JSON array of up to 3 candidate species identifications, ranked by confidence. Each entry must have this structure:
 {
@@ -26,7 +30,7 @@ Return a JSON array of up to 3 candidate species identifications, ranked by conf
   "scientific_name": "Scientific name (genus species)",
   "confidence": 0.0 to 1.0,
   "description": "Brief 1-2 sentence description",
-  "category": "${category}"
+  "category": "one of: mammal | bird | reptile | amphibian | insect | plant | fungi | trace"
 }
 
 If you cannot identify anything, return a single entry with confidence 0 and species "Unidentified".

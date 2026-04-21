@@ -141,10 +141,15 @@ export default function NewSightingPage() {
       const photo = capturedMedia[capturedMedia.length - 1]
       const timer = setTimeout(() => {
         setAiError(null)
-        if (photo?.type === 'photo' && isGeminiAvailable() && category) {
+        if (photo?.type === 'photo' && isGeminiAvailable()) {
           setAiLoading(true)
           identifySpecies(photo.blob, category)
-            .then(setAiSuggestions)
+            .then(suggestions => {
+              setAiSuggestions(suggestions)
+              // Auto-apply the category from the top suggestion if user didn't pick one
+              const topCat = suggestions[0]?.category as SightingCategory | undefined
+              if (!category && topCat && CATEGORIES.includes(topCat)) setCategory(topCat)
+            })
             .catch(err => {
               console.error('[identifySpecies] failed', err)
               setAiError(err?.message || String(err))
@@ -156,7 +161,6 @@ export default function NewSightingPage() {
             })
         } else {
           if (!isGeminiAvailable()) setAiError('VITE_GEMINI_API_KEY not found in env — is it set on Netlify and did you redeploy?')
-          else if (!category) setAiError('No category selected before capture — AI skipped.')
           else if (!navigator.onLine) setAiError('Offline — AI identification skipped.')
           setStep('identify')
         }
