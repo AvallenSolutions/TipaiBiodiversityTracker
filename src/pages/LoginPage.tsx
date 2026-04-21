@@ -1,7 +1,23 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { Leaf, Mail, Loader2 } from 'lucide-react'
+import { DS } from '@/lib/ledger-design'
+import { Mono } from '@/components/logger/shared'
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  fontFamily: DS.sans,
+  fontSize: 15,
+  padding: '8px 0',
+  borderBottom: `1px solid ${DS.ink}`,
+  borderTop: 'none',
+  borderLeft: 'none',
+  borderRight: 'none',
+  background: 'transparent',
+  color: DS.ink,
+  outline: 'none',
+  boxSizing: 'border-box',
+}
 
 export default function LoginPage() {
   const { signIn, signInAsGuest, user } = useAuth()
@@ -47,108 +63,261 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-tipai-stone-50 to-tipai-stone-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-6">
-        <div className="text-center">
-          <Leaf className="mx-auto h-14 w-14 text-tipai-700" />
-          <h1 className="mt-4 font-heading text-4xl font-semibold text-tipai-900">Tipai Biodiversity</h1>
-          <p className="mt-1 text-tipai-700">Track and protect forest life</p>
+    <div style={{
+      minHeight: '100dvh',
+      background: DS.paper,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px 20px',
+    }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+
+        {/* Masthead */}
+        <div style={{
+          borderTop: `3px double ${DS.ink}`,
+          paddingTop: 16,
+          marginBottom: 40,
+          textAlign: 'center',
+        }}>
+          <Mono size={9} letter={0.22} color={DS.ochre}>◆ Wildlife Luxuries / Tipai</Mono>
+          <h1 style={{
+            fontFamily: DS.serif,
+            fontSize: 36,
+            fontWeight: 300,
+            letterSpacing: '-0.02em',
+            margin: '8px 0 4px',
+            color: DS.ink,
+          }}>
+            The Field Journal
+          </h1>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 15,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            margin: 0,
+          }}>
+            Track and protect forest life.
+          </p>
         </div>
 
-        {/* Tab toggle */}
-        <div className="flex bg-white rounded-lg shadow-sm p-1">
-          <button
-            onClick={() => { setMode('login'); setError('') }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === 'login' ? 'bg-tipai-700 text-white' : 'text-gray-600'
-            }`}
-          >
-            Staff / Naturalist
-          </button>
-          <button
-            onClick={() => { setMode('guest'); setError('') }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === 'guest' ? 'bg-tipai-700 text-white' : 'text-gray-600'
-            }`}
-          >
-            Guest
-          </button>
+        {/* Mode toggle */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          borderBottom: `1px solid ${DS.ink}`,
+          marginBottom: 32,
+        }}>
+          {(['login', 'guest'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setError('') }}
+              style={{
+                fontFamily: DS.serif,
+                fontSize: 14,
+                fontStyle: 'italic',
+                fontWeight: 300,
+                color: mode === m ? DS.ink : DS.inkSoft,
+                background: 'none',
+                border: 'none',
+                borderBottom: mode === m ? `2px solid ${DS.ochre}` : '2px solid transparent',
+                padding: '8px 0 10px',
+                cursor: 'pointer',
+                marginBottom: -1,
+                transition: 'color 0.15s',
+              }}
+            >
+              {m === 'login' ? 'Staff / Naturalist' : 'Guest Access'}
+            </button>
+          ))}
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
-          )}
+        {/* Error */}
+        {error && (
+          <div style={{
+            padding: '8px 12px',
+            background: DS.rust,
+            color: DS.ivory,
+            fontFamily: DS.mono,
+            fontSize: 10,
+            letterSpacing: '0.05em',
+            marginBottom: 20,
+          }}>
+            {error}
+          </div>
+        )}
 
-          {mode === 'guest' && guestSent ? (
-            <div className="text-center py-4">
-              <Mail className="mx-auto h-12 w-12 text-tipai-600 mb-3" />
-              <h3 className="font-semibold text-gray-900">Check your email</h3>
-              <p className="text-sm text-gray-600 mt-2">
-                We've sent a magic link to <strong>{email}</strong>. Click it to log in.
-              </p>
-            </div>
-          ) : mode === 'guest' ? (
-            <form onSubmit={handleGuestLogin} className="space-y-4">
-              <p className="text-sm text-gray-600">Enter your email to receive a login link — no password needed.</p>
+        {/* Guest: sent confirmation */}
+        {mode === 'guest' && guestSent ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 12 }}>◆ Check your inbox</Mono>
+            <p style={{
+              fontFamily: DS.serif,
+              fontSize: 16,
+              fontWeight: 300,
+              lineHeight: 1.55,
+              color: DS.ink,
+              margin: '0 0 8px',
+            }}>
+              A sign-in link has been sent to
+            </p>
+            <p style={{
+              fontFamily: DS.mono,
+              fontSize: 12,
+              color: DS.ochre,
+              letterSpacing: '0.05em',
+              margin: '0 0 20px',
+            }}>
+              {email}
+            </p>
+            <p style={{
+              fontFamily: DS.serif,
+              fontSize: 13,
+              fontStyle: 'italic',
+              color: DS.inkSoft,
+              margin: 0,
+            }}>
+              Click the link in the email to enter the journal.
+            </p>
+            <button
+              onClick={() => { setGuestSent(false); setEmail('') }}
+              style={{
+                marginTop: 24,
+                fontFamily: DS.serif,
+                fontSize: 13,
+                fontStyle: 'italic',
+                color: DS.inkSoft,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Use a different address
+            </button>
+          </div>
+
+        ) : mode === 'guest' ? (
+          /* Guest: enter email */
+          <form onSubmit={handleGuestLogin}>
+            <p style={{
+              fontFamily: DS.serif,
+              fontSize: 14,
+              fontStyle: 'italic',
+              fontWeight: 300,
+              color: DS.inkSoft,
+              margin: '0 0 24px',
+              lineHeight: 1.5,
+            }}>
+              Enter your email and we'll send a sign-in link — no password needed.
+            </p>
+            <div style={{ marginBottom: 28 }}>
+              <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Email address</Mono>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="your.email@example.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
+                placeholder="your.name@example.com"
+                style={inputStyle}
               />
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-tipai-700 text-white py-2.5 rounded-lg font-semibold hover:bg-tipai-800 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Send Magic Link
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="your.email@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  minLength={6}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tipai-500 focus:border-transparent"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-tipai-700 text-white py-2.5 rounded-lg font-semibold hover:bg-tipai-800 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Sign In
-              </button>
-              <p className="text-center text-sm text-gray-600">
-                Don't have an account? <Link to="/signup" className="text-tipai-700 font-medium hover:underline">Sign Up</Link>
-              </p>
-            </form>
-          )}
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%',
+                fontFamily: DS.serif,
+                fontSize: 16,
+                fontStyle: 'italic',
+                fontWeight: 300,
+                color: DS.ivory,
+                background: loading ? DS.inkSoft : DS.ink,
+                border: 'none',
+                padding: '14px 0',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                letterSpacing: '0.01em',
+                transition: 'background 0.15s',
+              }}
+            >
+              {loading ? '⋯ Sending' : 'Send Magic Link →'}
+            </button>
+          </form>
+
+        ) : (
+          /* Staff: password login */
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: 24 }}>
+              <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Email address</Mono>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="your.name@example.com"
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ marginBottom: 32 }}>
+              <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Password</Mono>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                minLength={6}
+                style={inputStyle}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%',
+                fontFamily: DS.serif,
+                fontSize: 16,
+                fontStyle: 'italic',
+                fontWeight: 300,
+                color: DS.ivory,
+                background: loading ? DS.inkSoft : DS.ink,
+                border: 'none',
+                padding: '14px 0',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                letterSpacing: '0.01em',
+                transition: 'background 0.15s',
+              }}
+            >
+              {loading ? '⋯ Signing in' : 'Sign In →'}
+            </button>
+          </form>
+        )}
+
+        {/* Footer links */}
+        <div style={{
+          marginTop: 36,
+          paddingTop: 20,
+          borderTop: `0.5px solid ${DS.inkHair}`,
+          textAlign: 'center',
+        }}>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 13,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            margin: 0,
+          }}>
+            No account?{' '}
+            <Link to="/signup" style={{ color: DS.ink, textDecoration: 'underline' }}>
+              Register here
+            </Link>
+          </p>
         </div>
+
       </div>
     </div>
   )
