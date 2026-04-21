@@ -5,6 +5,8 @@ import { getPendingCount } from '@/lib/offline'
 import { format } from 'date-fns'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
+import InstallPromptSheet from '@/components/InstallPromptSheet'
+import { isStandalone, isMobile } from '@/hooks/useInstallPrompt'
 
 type NavItem = { path: string; label: string; short: string }
 
@@ -77,6 +79,23 @@ export default function AppShell() {
   // Hide masthead on the camera capture step — NewSightingPage renders its own
   // full-bleed chrome. Driven by data attribute set on <body>.
   const isFullBleed = useFullBleed()
+
+  // First-visit install prompt for signed-in mobile users
+  const [showInstall, setShowInstall] = useState(false)
+  useEffect(() => {
+    if (!profile) return
+    if (isStandalone()) return
+    if (!isMobile()) return
+    const key = `install-prompt-dismissed-${profile.id}`
+    if (localStorage.getItem(key)) return
+    const timer = setTimeout(() => setShowInstall(true), 1800)
+    return () => clearTimeout(timer)
+  }, [profile])
+
+  function dismissInstall() {
+    if (profile) localStorage.setItem(`install-prompt-dismissed-${profile.id}`, String(Date.now()))
+    setShowInstall(false)
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: DS.paper, color: DS.ink }}>
@@ -188,6 +207,8 @@ export default function AppShell() {
           </div>
         </nav>
       )}
+
+      {showInstall && <InstallPromptSheet onClose={dismissInstall} />}
     </div>
   )
 }
