@@ -59,10 +59,14 @@ export default function NewSightingPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // iOS (all browsers) must use the native file picker — getUserMedia is blocked
-  // per-app by iOS. <label htmlFor> triggers the input as a native tap (not JS
-  // .click()), which iOS allows; programmatic .click() from another element is blocked.
-  const useNativeCapture = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  // iOS Safari: use native file picker (getUserMedia works but live preview is
+  // fragile; file input + action sheet is reliable). Chrome iOS (CriOS) gets
+  // getUserMedia — it supports it since iOS 14.3 and shows a proper permission
+  // dialog, whereas the file-input "Take Photo" path silently uses Chrome's
+  // per-app camera permission which may not be granted, causing black screen.
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const isChromeIOS = isIOS && /CriOS/.test(navigator.userAgent)
+  const useNativeCapture = isIOS && !isChromeIOS
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -290,7 +294,7 @@ export default function NewSightingPage() {
             </Mono>
           </div>
 
-          {/* getUserMedia error (non-iOS) */}
+          {/* getUserMedia error */}
           {cameraError && !useNativeCapture && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
@@ -298,7 +302,9 @@ export default function NewSightingPage() {
               padding: 32, gap: 16, background: 'rgba(0,0,0,0.85)',
             }}>
               <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
-                {cameraError}
+                {isChromeIOS
+                  ? 'Camera access denied.\n\niOS Settings → Chrome → Camera → Allow\n\nThen tap Retry.'
+                  : cameraError}
               </Mono>
               <button onClick={startCamera} style={{
                 background: DS.ivory, color: DS.ink, border: 'none',
