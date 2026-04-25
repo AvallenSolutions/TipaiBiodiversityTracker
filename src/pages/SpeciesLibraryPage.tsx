@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSpecies } from '@/hooks/useSpecies'
 import { DS } from '@/lib/ledger-design'
 import { Mono, MonoIcon } from '@/components/logger/shared'
-import type { SightingCategory } from '@/types'
+import SpeciesDetailSheet from '@/components/SpeciesDetailSheet'
+import type { Species, SightingCategory } from '@/types'
 
 const CATEGORIES: { value: SightingCategory | ''; label: string }[] = [
   { value: '', label: 'All' },
@@ -20,7 +21,7 @@ export default function SpeciesLibraryPage() {
   const { species, loading, fetchSpecies } = useSpecies()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<SightingCategory | ''>('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Species | null>(null)
 
   const doFetch = useCallback(() => {
     fetchSpecies(activeCategory || undefined, search || undefined)
@@ -125,7 +126,7 @@ export default function SpeciesLibraryPage() {
               }}
             >
               <button
-                onClick={() => setExpandedId(expandedId === sp.id ? null : sp.id)}
+                onClick={() => setSelected(sp)}
                 style={{
                   width: '100%', background: 'none', border: 'none',
                   cursor: 'pointer', textAlign: 'left', padding: 0,
@@ -172,71 +173,12 @@ export default function SpeciesLibraryPage() {
                   </Mono>
                 </div>
               </button>
-
-              {/* Expanded details */}
-              {expandedId === sp.id && (sp.description || sp.habitat || sp.reference_image_url) && (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `0.5px solid ${DS.inkHair}` }}>
-                  {sp.reference_image_url && (
-                    <div style={{ marginBottom: 12 }}>
-                      <img
-                        src={sp.reference_image_url}
-                        alt={sp.common_name}
-                        loading="lazy"
-                        style={{
-                          width: '100%', maxHeight: 360, objectFit: 'cover',
-                          display: 'block', border: `0.5px solid ${DS.inkHair}`,
-                        }}
-                      />
-                      {sp.gallery_image_urls && sp.gallery_image_urls.length > 0 && (
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: `repeat(auto-fill, minmax(80px, 1fr))`,
-                          gap: 4, marginTop: 4,
-                        }}>
-                          {sp.gallery_image_urls.map((url) => (
-                            <img
-                              key={url}
-                              src={url}
-                              alt={sp.common_name}
-                              loading="lazy"
-                              style={{
-                                width: '100%', aspectRatio: '1 / 1', objectFit: 'cover',
-                                display: 'block', border: `0.5px solid ${DS.inkHair}`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {sp.description && (
-                    <div style={{ marginBottom: 8 }}>
-                      <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 4 }}>Description</Mono>
-                      <p style={{
-                        fontFamily: DS.serif, fontSize: 14, fontWeight: 300,
-                        lineHeight: 1.5, color: DS.ink, margin: 0,
-                      }}>
-                        {sp.description}
-                      </p>
-                    </div>
-                  )}
-                  {sp.habitat && (
-                    <div>
-                      <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 4 }}>Habitat</Mono>
-                      <p style={{
-                        fontFamily: DS.serif, fontSize: 14, fontWeight: 300,
-                        lineHeight: 1.5, color: DS.ink, margin: 0,
-                      }}>
-                        {sp.habitat}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
+
+      {selected && <SpeciesDetailSheet species={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }
