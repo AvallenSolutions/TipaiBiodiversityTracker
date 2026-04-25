@@ -101,10 +101,16 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 {format(sightedAt, 'HH:mm')} · {sighting.latitude.toFixed(4)}°N · {sighting.longitude.toFixed(4)}°E
               </Mono>
             </div>
-            <div style={{ height: 380, position: 'relative', background: DS.bone }}>
+            <div style={{
+              position: 'relative', background: DS.bone,
+              ...(photoUrl ? {} : { height: 380 }),
+            }}>
               {photoUrl ? (
                 <img src={photoUrl} alt="Sighting"
-                     style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                     style={{
+                       display: 'block', width: '100%', height: 'auto',
+                       maxHeight: '75vh', objectFit: 'contain',
+                     }} />
               ) : audioUrl ? (
                 <div style={{ position: 'relative', height: '100%' }}>
                   <PhotoPlaceholder hue="mist" height="100%" label="AUDIO ONLY · HEARD, NOT SEEN" />
