@@ -1,6 +1,10 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { DS, normalizeConf } from '../../lib/ledger-design'
-import type { Sighting } from '../../types'
+import { supabase } from '../../lib/supabase'
+import { useSpecies } from '../../hooks/useSpecies'
+import { useAuth } from '../../context/AuthContext'
+import type { Sighting, SightingCategory } from '../../types'
 import { Mono, PhotoPlaceholder } from './shared'
 
 function confidenceWord(conf: number): string {
@@ -18,10 +22,11 @@ function getAudioUrl(s: Sighting): string | null {
   return s.media?.find(m => m.media_type === 'audio')?.url ?? null
 }
 
-export function SightingDetailView({ sighting, onBack, onOpenSpecies }: {
+export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged }: {
   sighting: Sighting
   onBack: () => void
   onOpenSpecies: () => void
+  onChanged?: () => void
 }) {
   const conf = normalizeConf(sighting.ai_confidence)
   const topSuggestion = sighting.ai_suggestions?.[0] ?? null
@@ -30,6 +35,12 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies }: {
   const photoUrl = getPhotoUrl(sighting)
   const audioUrl = getAudioUrl(sighting)
   const isSynced = sighting.verification_status === 'verified'
+
+  const { profile } = useAuth()
+  const canPromote = profile?.role === 'naturalist' || profile?.role === 'admin'
+  const isManualEntry = !!sighting.common_name && !sighting.species_id
+  const [showPromote, setShowPromote] = useState(false)
+  const [promoteError, setPromoteError] = useState<string | null>(null)
 
   return (
     <div style={{ padding: '28px 40px 80px', background: DS.paper, minHeight: '100vh' }}>
@@ -216,32 +227,182 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies }: {
           </div>
 
           <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button style={{
-              padding: '18px 22px', background: DS.ink, color: DS.ivory, border: 'none', cursor: 'pointer',
-              fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <span>Verify &amp; seal the record</span>
-              <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 16, textTransform: 'none', letterSpacing: 0 }}>⎘ Seal</span>
-            </button>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <button style={{
-                padding: '14px 16px', background: 'transparent', color: DS.ink,
-                border: `0.5px solid ${DS.ink}`, cursor: 'pointer',
-                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-              }}>Edit the record</button>
-              <button style={{
-                padding: '14px 16px', background: 'transparent', color: DS.rust,
-                border: `0.5px solid ${DS.rust}`, cursor: 'pointer',
-                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-              }}>Reject · needs ID</button>
-            </div>
-            <Mono size={9} color={DS.inkFaint} style={{ textAlign: 'center', marginTop: 6 }}>
-              VERIFY / REJECT ACTIONS · PENDING BACKEND SUPPORT
-            </Mono>
+            {canPromote && isManualEntry && (
+              <button
+                onClick={() => { setPromoteError(null); setShowPromote(true) }}
+                style={{
+                  padding: '18px 22px', background: DS.ochre, color: DS.ink, border: 'none', cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}
+              >
+                <span>Add to species library</span>
+                <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 16, textTransform: 'none', letterSpacing: 0 }}>+ Promote</span>
+              </button>
+            )}
+            {promoteError && (
+              <div style={{
+                padding: '10px 14px', background: DS.rust, color: DS.ivory,
+                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+              }}>{promoteError}</div>
+            )}
           </div>
         </div>
       </div>
+
+      {showPromote && (
+        <PromoteToSpeciesSheet
+          sighting={sighting}
+          onClose={() => setShowPromote(false)}
+          onError={setPromoteError}
+          onPromoted={() => {
+            setShowPromote(false)
+            onChanged?.()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function PromoteToSpeciesSheet({
+  sighting, onClose, onPromoted, onError,
+}: {
+  sighting: Sighting
+  onClose: () => void
+  onPromoted: () => void
+  onError: (msg: string) => void
+}) {
+  const { createSpecies } = useSpecies()
+  const [common, setCommon] = useState(sighting.common_name ?? '')
+  const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
+  const [category, setCategory] = useState<SightingCategory>(sighting.category)
+  const [description, setDescription] = useState('')
+  const [habitat, setHabitat] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit() {
+    if (!common.trim()) {
+      onError('Common name is required')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const created = await createSpecies({
+        common_name: common.trim(),
+        scientific_name: scientific.trim() || null,
+        category,
+        description: description.trim() || null,
+        habitat: habitat.trim() || null,
+      })
+      const { error: updateError } = await (supabase.from('sightings') as any)
+        .update({
+          species_id: created.id,
+          common_name: created.common_name,
+          scientific_name: created.scientific_name,
+          verification_status: 'verified',
+        })
+        .eq('id', sighting.id)
+      if (updateError) throw updateError
+      onPromoted()
+    } catch (err: any) {
+      onError(err?.message || 'Failed to promote species')
+      setSubmitting(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px',
+    border: `0.5px solid ${DS.inkFaint}`, background: DS.bone,
+    fontFamily: DS.serif, fontSize: 16, fontWeight: 400,
+    color: DS.ink, outline: 'none',
+  }
+
+  const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace']
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 90,
+        background: 'rgba(11,14,12,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: DS.ivory, padding: '22px 24px',
+          maxWidth: 520, width: '100%', maxHeight: '90vh', overflow: 'auto',
+          border: `1px solid ${DS.ink}`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 12, borderBottom: `1px solid ${DS.ink}` }}>
+          <Mono size={10} letter={0.2} color={DS.ochre}>◆ Add to species library</Mono>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.2em',
+            color: DS.inkSoft, textTransform: 'uppercase',
+          }}>Cancel</button>
+        </div>
+
+        <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="Common name *">
+            <input value={common} onChange={(e) => setCommon(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Scientific name">
+            <input value={scientific} onChange={(e) => setScientific(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Category">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {CATEGORIES.map(c => (
+                <button key={c} onClick={() => setCategory(c)} style={{
+                  padding: '8px 12px',
+                  background: category === c ? DS.ink : 'transparent',
+                  color: category === c ? DS.ivory : DS.ink,
+                  border: `0.5px solid ${category === c ? DS.ink : DS.inkFaint}`,
+                  cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                }}>{c}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Description (optional)">
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} />
+          </Field>
+          <Field label="Habitat (optional)">
+            <input value={habitat} onChange={(e) => setHabitat(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+
+        <button onClick={handleSubmit} disabled={submitting || !common.trim()}
+          style={{
+            marginTop: 22, width: '100%', padding: '16px 20px',
+            background: submitting || !common.trim() ? DS.inkFaint : DS.ochre,
+            color: DS.ink, border: 'none',
+            cursor: submitting || !common.trim() ? 'not-allowed' : 'pointer',
+            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
+            textTransform: 'uppercase', fontWeight: 500,
+          }}
+        >
+          {submitting ? 'Promoting…' : 'Add species & verify sighting'}
+        </button>
+        <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginTop: 8, textAlign: 'center' }}>
+          The sighting will be linked to this new species and marked verified
+        </Mono>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <Mono size={9} letter={0.2} color={DS.inkSoft} style={{ marginBottom: 6 }}>{label}</Mono>
+      {children}
     </div>
   )
 }
