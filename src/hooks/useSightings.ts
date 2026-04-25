@@ -22,7 +22,7 @@ export function useSightings() {
 
     try {
       let query = (supabase.from('sightings') as any)
-        .select('*, sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
+        .select('*, media:sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
         .order('sighted_at', { ascending: false })
 
       if (filters?.category) query = query.eq('category', filters.category)

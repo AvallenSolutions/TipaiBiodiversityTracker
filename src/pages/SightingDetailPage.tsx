@@ -24,7 +24,7 @@ export default function SightingDetailPage() {
     setLoading(true)
     try {
       const { data, error: err } = await (supabase.from('sightings') as any)
-        .select('*, sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
+        .select('*, media:sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
         .eq('id', id)
         .single()
       if (err) throw err
