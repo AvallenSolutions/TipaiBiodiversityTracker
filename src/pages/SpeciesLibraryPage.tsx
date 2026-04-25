@@ -134,11 +134,21 @@ export default function SpeciesLibraryPage() {
                 }}
               >
                 <div style={{
-                  width: 32, height: 32, border: `0.5px solid ${DS.ink}`,
+                  width: 56, height: 56, border: `0.5px solid ${DS.ink}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: DS.forest, flexShrink: 0,
+                  color: DS.forest, flexShrink: 0, overflow: 'hidden',
+                  background: DS.ivory,
                 }}>
-                  <MonoIcon category={sp.category} size={20} />
+                  {sp.reference_image_url ? (
+                    <img
+                      src={sp.reference_image_url}
+                      alt={sp.common_name}
+                      loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                  ) : (
+                    <MonoIcon category={sp.category} size={24} />
+                  )}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <h3 style={{
@@ -164,8 +174,41 @@ export default function SpeciesLibraryPage() {
               </button>
 
               {/* Expanded details */}
-              {expandedId === sp.id && (sp.description || sp.habitat) && (
+              {expandedId === sp.id && (sp.description || sp.habitat || sp.reference_image_url) && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `0.5px solid ${DS.inkHair}` }}>
+                  {sp.reference_image_url && (
+                    <div style={{ marginBottom: 12 }}>
+                      <img
+                        src={sp.reference_image_url}
+                        alt={sp.common_name}
+                        loading="lazy"
+                        style={{
+                          width: '100%', maxHeight: 360, objectFit: 'cover',
+                          display: 'block', border: `0.5px solid ${DS.inkHair}`,
+                        }}
+                      />
+                      {sp.gallery_image_urls && sp.gallery_image_urls.length > 0 && (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: `repeat(auto-fill, minmax(80px, 1fr))`,
+                          gap: 4, marginTop: 4,
+                        }}>
+                          {sp.gallery_image_urls.map((url) => (
+                            <img
+                              key={url}
+                              src={url}
+                              alt={sp.common_name}
+                              loading="lazy"
+                              style={{
+                                width: '100%', aspectRatio: '1 / 1', objectFit: 'cover',
+                                display: 'block', border: `0.5px solid ${DS.inkHair}`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {sp.description && (
                     <div style={{ marginBottom: 8 }}>
                       <Mono size={9} letter={0.22} color={DS.ochre} style={{ marginBottom: 4 }}>Description</Mono>
