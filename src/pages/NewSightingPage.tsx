@@ -170,21 +170,31 @@ export default function NewSightingPage() {
     }
   }, [step, capturedMedia, category])
 
+  // Trigger geolocation as soon as the user enters the log flow so the
+  // permission dialog and GPS lookup run in parallel with the photo
+  // capture and AI identification, instead of starting only when the
+  // user lands on the entry view (where they may submit before the
+  // fix resolves and end up persisting 0,0).
   useEffect(() => {
-    if (step === 'entry') {
-      getLocation()
+    if (step === 'camera' || step === 'identifying' || step === 'entry') {
+      if (!location) getLocation()
     }
-  }, [step, getLocation])
+  }, [step, location, getLocation])
 
   async function handleSubmit() {
     if (!category || !user) return
+    if (!location) {
+      setSubmitError('Waiting for GPS — please allow location access and try again.')
+      getLocation()
+      return
+    }
     setSubmitting(true)
     setSubmitError(null)
 
     const sightingId = uuidv4()
     const now = new Date().toISOString()
-    const lat = location?.latitude ?? 0
-    const lng = location?.longitude ?? 0
+    const lat = location.latitude
+    const lng = location.longitude
 
     try {
       if (navigator.onLine) {
@@ -541,7 +551,7 @@ export default function NewSightingPage() {
   if (step === 'entry') {
     const when = new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long' })
     const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-    const coords = location ? formatCoordinates(location.latitude, location.longitude) : '—'
+    const coords = location ? formatCoordinates(location.latitude, location.longitude) : '⋯ acquiring GPS'
 
     return (
       <div style={{
@@ -622,14 +632,19 @@ export default function NewSightingPage() {
               marginBottom: 12, textTransform: 'uppercase',
             }}>{submitError}</div>
           )}
-          <button onClick={handleSubmit} disabled={submitting} style={{
-            width: '100%', padding: '18px 20px', background: DS.ochre, color: DS.ink,
-            border: 'none', cursor: 'pointer',
+          <button onClick={handleSubmit} disabled={submitting || !location} style={{
+            width: '100%', padding: '18px 20px',
+            background: !location ? DS.inkFaint : DS.ochre, color: DS.ink,
+            border: 'none', cursor: submitting || !location ? 'not-allowed' : 'pointer',
             fontFamily: DS.mono, fontSize: 12, letterSpacing: '0.3em',
             textTransform: 'uppercase', fontWeight: 500,
             opacity: submitting ? 0.5 : 1,
           }}>
-            {submitting ? 'Sealing…' : 'Seal the entry ⎘'}
+            {submitting
+              ? 'Sealing…'
+              : !location
+                ? 'Waiting for GPS…'
+                : 'Seal the entry ⎘'}
           </button>
         </div>
 
