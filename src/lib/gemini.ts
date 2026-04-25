@@ -60,9 +60,10 @@ Only return a single "Unidentified" record (confidence 0) if the image is genuin
       }],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   })
