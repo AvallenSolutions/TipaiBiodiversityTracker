@@ -41,6 +41,7 @@ export default function NewSightingPage() {
 
   // Entry fields
   const [selectedSpecies, setSelectedSpecies] = useState<AISuggestion | null>(null)
+  const [linkedSpeciesId, setLinkedSpeciesId] = useState<string | null>(null)
   const [count, setCount] = useState(1)
   const [sexAge, setSexAge] = useState('Adult male')
   const [behaviour, setBehaviour] = useState('Resting')
@@ -197,7 +198,7 @@ export default function NewSightingPage() {
         const { error: sightingError } = await (supabase.from('sightings') as any).insert({
           id: sightingId,
           user_id: user.id,
-          species_id: null,
+          species_id: linkedSpeciesId,
           category,
           common_name: selectedSpecies?.common_name || null,
           scientific_name: selectedSpecies?.scientific_name || null,
@@ -473,25 +474,45 @@ export default function NewSightingPage() {
             </div>
           ) : aiSuggestions.length > 0 ? (
             <>
-              {(() => {
-                const primary = aiSuggestions[0] ?? null
-                return primary ? (
-                  <button onClick={() => { setSelectedSpecies(primary); setStep('entry'); }} style={{
-                    textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
-                    padding: '20px 0 22px', borderBottom: `0.5px solid ${DS.inkHair}`,
-                  }}>
-                    <Mono size={9} letter={0.2} color={DS.inkSoft}>MAM · PRIMARY</Mono>
-                    <div style={{
-                      fontFamily: DS.serif, fontSize: 36, fontWeight: 300,
-                      color: DS.ink, letterSpacing: '-0.02em', lineHeight: 1, marginTop: 8,
-                    }}>{primary.common_name}</div>
-                    <div style={{
-                      fontFamily: DS.serif, fontSize: 16, fontStyle: 'italic',
-                      fontWeight: 300, color: DS.inkSoft, marginTop: 4,
-                    }}>{primary.scientific_name}</div>
+              {aiSuggestions.map((s, idx) => {
+                const isPrimary = idx === 0
+                const cat = (s.category ?? category ?? 'sub').toString().slice(0, 3).toUpperCase()
+                const label = isPrimary ? `${cat} · PRIMARY` : `${cat} · ALT ${String(idx + 1).padStart(2, '0')}`
+                const confPct = Math.round(normalizeConf(s.confidence) * 100)
+                return (
+                  <button
+                    key={`${s.common_name}-${idx}`}
+                    onClick={() => { setSelectedSpecies(s); setStep('entry') }}
+                    style={{
+                      textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: isPrimary ? '20px 0 22px' : '16px 0 18px',
+                      borderBottom: `0.5px solid ${DS.inkHair}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <Mono size={9} letter={0.2} color={DS.inkSoft}>{label}</Mono>
+                      <div style={{
+                        fontFamily: DS.serif,
+                        fontSize: isPrimary ? 36 : 22,
+                        fontWeight: 300,
+                        color: DS.ink, letterSpacing: '-0.02em',
+                        lineHeight: 1.05, marginTop: 8,
+                      }}>{s.common_name}</div>
+                      {s.scientific_name && (
+                        <div style={{
+                          fontFamily: DS.serif,
+                          fontSize: isPrimary ? 16 : 13,
+                          fontStyle: 'italic', fontWeight: 300, color: DS.inkSoft, marginTop: 4,
+                        }}>{s.scientific_name}</div>
+                      )}
+                    </div>
+                    {!isPrimary && confPct > 0 && (
+                      <Mono size={9} color={DS.inkSoft} letter={0.18}>{confPct}%</Mono>
+                    )}
                   </button>
-                ) : null
-              })()}
+                )
+              })}
 
               <button onClick={() => { setSelectedSpecies(null); setStep('entry'); }} style={{
                 background: 'transparent', border: 'none', padding: '16px 0 24px',
@@ -557,7 +578,11 @@ export default function NewSightingPage() {
             n the morning of <strong style={{ fontWeight: 400 }}>{when}</strong>, at <strong style={{ fontWeight: 400 }}>{time}</strong>, I observed{' '}
             <Blank onClick={open('count')} placeholder="how many?">{count}</Blank>{' '}
             <Blank onClick={open('sexAge')} placeholder="sex & age">{sexAge.toLowerCase()}</Blank>{' '}
-            <em style={{ fontWeight: 300 }}>{selectedSpecies?.scientific_name || '?'}</em> — behaviour:{' '}
+            <Blank onClick={open('species')} placeholder="which species?">
+              {selectedSpecies?.common_name
+                ? <>{selectedSpecies.common_name}{selectedSpecies.scientific_name && <em style={{ fontWeight: 300, marginLeft: 4 }}>({selectedSpecies.scientific_name})</em>}</>
+                : null}
+            </Blank> — behaviour:{' '}
             <Blank onClick={open('behaviour')} placeholder="what?">{behaviour.toLowerCase()}</Blank> — in{' '}
             <Blank onClick={open('habitat')} placeholder="habitat">{habitat.toLowerCase()}</Blank>, light{' '}
             <Blank onClick={open('weather')} placeholder="weather">{weather.toLowerCase()}</Blank>, at{' '}
@@ -638,6 +663,40 @@ export default function NewSightingPage() {
             onChoose={(v) => { setConfidence(String(v)); setPicker(null); }}
             onClose={() => setPicker(null)} />
         )}
+        {picker === 'species' && (
+          <SpeciesInputSheet
+            initialCommon={selectedSpecies?.common_name ?? ''}
+            initialScientific={selectedSpecies?.scientific_name ?? ''}
+            librarySpecies={species}
+            fetchSpecies={fetchSpecies}
+            onPickFromLibrary={(sp) => {
+              setSelectedSpecies({
+                species: sp.common_name,
+                common_name: sp.common_name,
+                scientific_name: sp.scientific_name ?? null,
+                confidence: 1,
+                description: sp.description,
+                category: sp.category,
+              })
+              setLinkedSpeciesId(sp.id)
+              if (!category) setCategory(sp.category)
+              setPicker(null)
+            }}
+            onSaveManual={(common, scientific) => {
+              setSelectedSpecies({
+                species: common,
+                common_name: common,
+                scientific_name: scientific || null,
+                confidence: 0,
+                description: null,
+                category: category ?? undefined,
+              })
+              setLinkedSpeciesId(null)
+              setPicker(null)
+            }}
+            onClose={() => setPicker(null)}
+          />
+        )}
       </div>
     )
   }
@@ -679,4 +738,140 @@ export default function NewSightingPage() {
   }
 
   return null
+}
+
+function SpeciesInputSheet({
+  initialCommon, initialScientific, librarySpecies, fetchSpecies,
+  onPickFromLibrary, onSaveManual, onClose,
+}: {
+  initialCommon: string
+  initialScientific: string
+  librarySpecies: import('@/types').Species[]
+  fetchSpecies: (cat?: SightingCategory, search?: string) => void
+  onPickFromLibrary: (sp: import('@/types').Species) => void
+  onSaveManual: (common: string, scientific: string) => void
+  onClose: () => void
+}) {
+  const [common, setCommon] = useState(initialCommon)
+  const [scientific, setScientific] = useState(initialScientific)
+
+  useEffect(() => {
+    const t = setTimeout(() => fetchSpecies(undefined, common.trim() || undefined), 250)
+    return () => clearTimeout(t)
+  }, [common, fetchSpecies])
+
+  const matches = common.trim()
+    ? librarySpecies.slice(0, 6)
+    : []
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px',
+    border: `0.5px solid ${DS.inkFaint}`, background: DS.bone,
+    fontFamily: DS.serif, fontSize: 16, fontWeight: 400,
+    color: DS.ink, outline: 'none',
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 80,
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        background: 'rgba(11,14,12,0.4)',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: DS.ivory, padding: '18px 20px max(40px, env(safe-area-inset-bottom))', maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          paddingBottom: 12, borderBottom: `1px solid ${DS.ink}`,
+        }}>
+          <Mono size={10} letter={0.2}>Identify the species</Mono>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.2em',
+            color: DS.inkSoft, textTransform: 'uppercase',
+          }}>Close</button>
+        </div>
+
+        <div style={{ paddingTop: 18 }}>
+          <Mono size={9} letter={0.2} color={DS.inkSoft} style={{ marginBottom: 6 }}>Common name</Mono>
+          <input
+            autoFocus value={common} onChange={(e) => setCommon(e.target.value)}
+            placeholder="e.g. Sambar Deer"
+            style={inputStyle}
+          />
+        </div>
+
+        {matches.length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginBottom: 6 }}>
+              In the library
+            </Mono>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {matches.map(sp => (
+                <button
+                  key={sp.id}
+                  onClick={() => onPickFromLibrary(sp)}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
+                    padding: '12px 0', textAlign: 'left',
+                    borderBottom: `0.5px solid ${DS.inkHair}`,
+                    background: 'transparent', border: 'none', borderTop: 'none',
+                    borderLeft: 'none', borderRight: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{
+                      fontFamily: DS.serif, fontSize: 16, fontWeight: 400, color: DS.ink,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{sp.common_name}</div>
+                    {sp.scientific_name && (
+                      <div style={{
+                        fontFamily: DS.serif, fontSize: 13, fontStyle: 'italic',
+                        fontWeight: 300, color: DS.inkSoft,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{sp.scientific_name}</div>
+                    )}
+                  </div>
+                  <Mono size={8} letter={0.18} color={DS.inkFaint}>{sp.category.toUpperCase()}</Mono>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ paddingTop: 18 }}>
+          <Mono size={9} letter={0.2} color={DS.inkSoft} style={{ marginBottom: 6 }}>
+            Scientific name <span style={{ color: DS.inkFaint }}>(optional)</span>
+          </Mono>
+          <input
+            value={scientific} onChange={(e) => setScientific(e.target.value)}
+            placeholder="e.g. Rusa unicolor"
+            style={inputStyle}
+          />
+        </div>
+
+        <button
+          onClick={() => onSaveManual(common.trim(), scientific.trim())}
+          disabled={!common.trim()}
+          style={{
+            marginTop: 22, width: '100%', padding: '16px 18px',
+            background: common.trim() ? DS.ochre : DS.inkFaint, color: DS.ink, border: 'none',
+            cursor: common.trim() ? 'pointer' : 'not-allowed',
+            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
+            textTransform: 'uppercase', fontWeight: 500,
+          }}
+        >
+          Log as manual entry
+        </button>
+        <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginTop: 8, textAlign: 'center' }}>
+          A naturalist will review and may add it to the library
+        </Mono>
+      </div>
+    </div>
+  )
 }
