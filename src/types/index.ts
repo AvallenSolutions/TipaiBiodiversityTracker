@@ -43,8 +43,8 @@ export interface Sighting {
   common_name: string | null
   scientific_name: string | null
   notes: string | null
-  latitude: number
-  longitude: number
+  latitude: number | null
+  longitude: number | null
   location_accuracy: number | null
   sighted_at: string
   verification_status: VerificationStatus
@@ -98,12 +98,14 @@ export interface LocationData {
 
 export interface PendingSighting {
   id: string
+  user_id: string
+  species_id: string | null
   category: SightingCategory
   common_name: string | null
   scientific_name: string | null
   notes: string | null
-  latitude: number
-  longitude: number
+  latitude: number | null
+  longitude: number | null
   location_accuracy: number | null
   sighted_at: string
   ai_suggestions: AISuggestion[] | null
