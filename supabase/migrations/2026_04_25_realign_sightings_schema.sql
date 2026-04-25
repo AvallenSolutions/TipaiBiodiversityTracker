@@ -37,6 +37,23 @@ CREATE TYPE export_status AS ENUM ('not_exported', 'pending', 'exported', 'exclu
 DROP TYPE IF EXISTS public.media_type CASCADE;
 CREATE TYPE media_type AS ENUM ('photo', 'video', 'audio');
 
+-- 2b. Ensure the helper functions referenced by the RLS policies and
+--     the updated_at trigger exist. CREATE OR REPLACE is idempotent
+--     and safe to run on a database that already has them.
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS user_role LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$;
+
 -- 3. Recreate sightings with the canonical column set.
 CREATE TABLE public.sightings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
