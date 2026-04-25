@@ -29,7 +29,8 @@ const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian'
 export default function NewSightingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { location, getLocation } = useGeolocation()
+  const { location, getLocation, error: locationError, loading: locationLoading } = useGeolocation()
+  const [skipLocation, setSkipLocation] = useState(false)
   const { species, fetchSpecies } = useSpecies()
 
   const [step, setStep] = useState<Step>('camera')
@@ -54,6 +55,7 @@ export default function NewSightingPage() {
   // Submission
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [sealedOffline, setSealedOffline] = useState(false)
 
   // Camera
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -183,8 +185,14 @@ export default function NewSightingPage() {
 
   async function handleSubmit() {
     if (!category || !user) return
-    if (!location) {
-      setSubmitError('Waiting for GPS — please allow location access and try again.')
+    // GPS is required online; offline we let the naturalist explicitly
+    // skip if the receiver can't lock (indoors, cold-start failure, etc.).
+    if (!location && !skipLocation) {
+      setSubmitError(
+        navigator.onLine
+          ? 'Waiting for GPS — please allow location access and try again.'
+          : 'Waiting for GPS. If you can\'t get a fix, tap "Save without location" below; you can add it on sync.'
+      )
       getLocation()
       return
     }
@@ -193,8 +201,9 @@ export default function NewSightingPage() {
 
     const sightingId = uuidv4()
     const now = new Date().toISOString()
-    const lat = location.latitude
-    const lng = location.longitude
+    const lat = location?.latitude ?? null
+    const lng = location?.longitude ?? null
+    const wasOffline = !navigator.onLine
 
     try {
       if (navigator.onLine) {
@@ -215,6 +224,7 @@ export default function NewSightingPage() {
           notes: notes || null,
           latitude: lat,
           longitude: lng,
+          location_accuracy: location?.accuracy ?? null,
           sighted_at: now,
           verification_status: 'unverified',
           ai_confidence: selectedSpecies?.confidence ?? null,
@@ -239,6 +249,8 @@ export default function NewSightingPage() {
       } else {
         await savePendingSighting({
           id: sightingId,
+          user_id: user.id,
+          species_id: linkedSpeciesId,
           category,
           common_name: selectedSpecies?.common_name || null,
           scientific_name: selectedSpecies?.scientific_name || null,
@@ -259,8 +271,9 @@ export default function NewSightingPage() {
         })
       }
 
+      setSealedOffline(wasOffline)
       setStep('sealed')
-      setTimeout(() => navigate('/', { replace: true }), 2500)
+      setTimeout(() => navigate('/', { replace: true }), wasOffline ? 4000 : 2500)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to save sighting')
       setSubmitting(false)
@@ -632,20 +645,62 @@ export default function NewSightingPage() {
               marginBottom: 12, textTransform: 'uppercase',
             }}>{submitError}</div>
           )}
-          <button onClick={handleSubmit} disabled={submitting || !location} style={{
-            width: '100%', padding: '18px 20px',
-            background: !location ? DS.inkFaint : DS.ochre, color: DS.ink,
-            border: 'none', cursor: submitting || !location ? 'not-allowed' : 'pointer',
-            fontFamily: DS.mono, fontSize: 12, letterSpacing: '0.3em',
-            textTransform: 'uppercase', fontWeight: 500,
-            opacity: submitting ? 0.5 : 1,
-          }}>
+          {locationError && !location && (
+            <div style={{
+              padding: '10px 14px', background: 'rgba(184,90,61,0.08)',
+              border: `0.5px solid ${DS.rust}`,
+              marginBottom: 12,
+            }}>
+              <Mono size={9} color={DS.rust} letter={0.15} style={{ lineHeight: 1.6 }}>
+                GPS: {locationError}
+              </Mono>
+            </div>
+          )}
+          {!navigator.onLine && (
+            <Mono size={9} color={DS.ochre} letter={0.18} style={{ display: 'block', marginBottom: 10, textAlign: 'center' }}>
+              Offline · the entry will be held on the device and synced on signal
+            </Mono>
+          )}
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || (!location && !skipLocation)}
+            style={{
+              width: '100%', padding: '18px 20px',
+              background: (!location && !skipLocation) ? DS.inkFaint : DS.ochre, color: DS.ink,
+              border: 'none',
+              cursor: submitting || (!location && !skipLocation) ? 'not-allowed' : 'pointer',
+              fontFamily: DS.mono, fontSize: 12, letterSpacing: '0.3em',
+              textTransform: 'uppercase', fontWeight: 500,
+              opacity: submitting ? 0.5 : 1,
+            }}
+          >
             {submitting
               ? 'Sealing…'
-              : !location
-                ? 'Waiting for GPS…'
-                : 'Seal the entry ⎘'}
+              : !location && !skipLocation
+                ? (locationLoading ? 'Acquiring GPS…' : 'Waiting for GPS…')
+                : skipLocation && !location
+                  ? 'Save without location ⎘'
+                  : navigator.onLine
+                    ? 'Seal the entry ⎘'
+                    : 'Save offline ⎘'}
           </button>
+          {!location && !navigator.onLine && (
+            <button
+              onClick={() => setSkipLocation(true)}
+              disabled={skipLocation}
+              style={{
+                width: '100%', padding: '12px 16px', marginTop: 10,
+                background: 'transparent', color: DS.inkSoft,
+                border: `0.5px solid ${DS.inkFaint}`,
+                cursor: skipLocation ? 'default' : 'pointer',
+                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                opacity: skipLocation ? 0.5 : 1,
+              }}
+            >
+              {skipLocation ? '✓ Will save without location' : 'Save without location'}
+            </button>
+          )}
         </div>
 
         {picker === 'count' && (
@@ -739,14 +794,30 @@ export default function NewSightingPage() {
         </div>
 
         <div style={{ textAlign: 'center' }}>
-          <Mono size={10} letter={0.25} color={DS.ochre} style={{ marginBottom: 12 }}>Entry sealed</Mono>
+          <Mono size={10} letter={0.25} color={DS.ochre} style={{ marginBottom: 12 }}>
+            {sealedOffline ? 'Held locally' : 'Entry sealed'}
+          </Mono>
           <h2 style={{
             fontFamily: DS.serif, fontSize: 32, fontWeight: 300,
             letterSpacing: '-0.02em', color: DS.ink, lineHeight: 1.1,
           }}>
             {selectedSpecies?.common_name || 'Unidentified'}<br />
-            <em style={{ fontWeight: 300, color: DS.inkSoft }}>has been entered into the logbook.</em>
+            <em style={{ fontWeight: 300, color: DS.inkSoft }}>
+              {sealedOffline
+                ? 'is saved on the device.'
+                : 'has been entered into the logbook.'}
+            </em>
           </h2>
+          {sealedOffline && (
+            <p style={{
+              marginTop: 18, maxWidth: 360,
+              fontFamily: DS.serif, fontSize: 15, fontStyle: 'italic',
+              fontWeight: 300, color: DS.inkSoft, lineHeight: 1.5,
+            }}>
+              Open the app on signal to sync this sighting to the logbook. The
+              upload happens automatically the moment you're back online.
+            </p>
+          )}
         </div>
       </div>
     )

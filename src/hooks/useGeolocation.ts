@@ -28,14 +28,19 @@ export function useGeolocation() {
         setError(`Location error: ${err.message}`)
         setLoading(false)
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      // 60s timeout because cold-start GPS without A-GPS (i.e. offline)
+      // can legitimately take 30+ seconds outdoors; maximumAge: 60000
+      // accepts a recent cached fix so the picker isn't blocked while
+      // the receiver re-locks for a fresh reading.
+      { enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 }
     )
   }, [])
 
   return { location, loading, error, getLocation }
 }
 
-export function formatCoordinates(lat: number, lng: number): string {
+export function formatCoordinates(lat: number | null, lng: number | null): string {
+  if (lat == null || lng == null) return '— no GPS —'
   const latDir = lat >= 0 ? 'N' : 'S'
   const lngDir = lng >= 0 ? 'E' : 'W'
   return `${Math.abs(lat).toFixed(6)}°${latDir}, ${Math.abs(lng).toFixed(6)}°${lngDir}`

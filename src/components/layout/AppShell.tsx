@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
-import { useState, useEffect, useRef } from 'react'
-import { getPendingCount } from '@/lib/offline'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { getPendingCount, syncPendingSightings } from '@/lib/offline'
 import { format } from 'date-fns'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
@@ -23,8 +23,28 @@ export default function AppShell() {
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [pendingCount, setPendingCount] = useState(0)
   const [syncedCount, setSyncedCount] = useState<number | null>(null)
+  const [syncFailedCount, setSyncFailedCount] = useState(0)
+  const [syncing, setSyncing] = useState(false)
   const prevOnlineRef = useRef(navigator.onLine)
   const syncBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runSync = useCallback(async () => {
+    if (!profile?.id) return
+    setSyncing(true)
+    try {
+      const result = await syncPendingSightings(profile.id)
+      setSyncedCount(result.synced)
+      setSyncFailedCount(result.failed.length)
+      const remaining = await getPendingCount()
+      setPendingCount(remaining)
+      if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
+      syncBannerTimerRef.current = setTimeout(() => setSyncedCount(null), 4000)
+    } catch (err) {
+      console.error('Sync failed', err)
+    } finally {
+      setSyncing(false)
+    }
+  }, [profile?.id])
 
   useEffect(() => {
     function refreshPending() {
@@ -38,12 +58,17 @@ export default function AppShell() {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
+      // If we just transitioned from offline -> online and there are
+      // pending sightings, push them to Supabase. The runSync helper
+      // updates pendingCount and the synced banner on success.
       if (!prevOnlineRef.current) {
         getPendingCount().then(count => {
-          setSyncedCount(count > 0 ? count : 0)
-          setPendingCount(0)
-          if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
-          syncBannerTimerRef.current = setTimeout(() => setSyncedCount(null), 3000)
+          if (count > 0) runSync()
+          else {
+            setSyncedCount(0)
+            if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
+            syncBannerTimerRef.current = setTimeout(() => setSyncedCount(null), 2000)
+          }
         }).catch(() => {})
       }
       prevOnlineRef.current = true
@@ -63,7 +88,18 @@ export default function AppShell() {
       window.removeEventListener('offline', handleOffline)
       if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
     }
-  }, [])
+  }, [runSync])
+
+  // Also try to sync on mount when starting up online — covers the case
+  // where the browser was relaunched after going offline (no online event
+  // fires because the network state is the same as the saved state).
+  useEffect(() => {
+    if (navigator.onLine && profile?.id) {
+      getPendingCount().then(count => {
+        if (count > 0) runSync()
+      }).catch(() => {})
+    }
+  }, [profile?.id, runSync])
 
   const allNav: NavItem[] = [
     ...navItems,
@@ -99,21 +135,44 @@ export default function AppShell() {
 
   return (
     <div style={{ minHeight: '100vh', background: DS.paper, color: DS.ink }}>
-      {/* Offline / synced banner */}
+      {/* Offline / sync banners */}
       {!isOnline && (
         <div style={bannerStyle(DS.rust)}>
           <Mono size={10} color={DS.ivory} letter={0.22}>
-            Offline · entries will sync when signal returns
+            {pendingCount > 0
+              ? `Offline · ${pendingCount} sighting${pendingCount === 1 ? '' : 's'} held locally — open the app on signal to sync`
+              : 'Offline · entries will sync when signal returns'}
           </Mono>
         </div>
       )}
-      {isOnline && syncedCount !== null && (
-        <div style={bannerStyle(DS.forest)}>
+      {isOnline && syncing && (
+        <div style={bannerStyle(DS.ochre)}>
+          <Mono size={10} color={DS.ink} letter={0.22}>⋯ Syncing held sightings</Mono>
+        </div>
+      )}
+      {isOnline && !syncing && syncedCount !== null && (
+        <div style={bannerStyle(syncFailedCount > 0 ? DS.rust : DS.forest)}>
           <Mono size={10} color={DS.ivory} letter={0.22}>
-            {syncedCount > 0
-              ? `${syncedCount} entr${syncedCount === 1 ? 'y' : 'ies'} synced`
-              : 'Back online'}
+            {syncFailedCount > 0
+              ? `${syncedCount} synced · ${syncFailedCount} failed (kept locally for retry)`
+              : syncedCount > 0
+                ? `${syncedCount} entr${syncedCount === 1 ? 'y' : 'ies'} synced`
+                : 'Back online'}
           </Mono>
+        </div>
+      )}
+      {isOnline && !syncing && syncedCount === null && pendingCount > 0 && (
+        <div style={bannerStyle(DS.ochre)}>
+          <button
+            onClick={runSync}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+              textTransform: 'uppercase', color: DS.ink,
+            }}
+          >
+            {pendingCount} pending · tap to sync now →
+          </button>
         </div>
       )}
 

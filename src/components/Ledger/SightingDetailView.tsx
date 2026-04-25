@@ -98,13 +98,19 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
               <Mono size={9} color={DS.ochre}>◆ PLATE I · THE EVIDENCE</Mono>
               <Mono size={9} color={DS.inkSoft}>
-                {format(sightedAt, 'HH:mm')} · {sighting.latitude.toFixed(4)}°N · {sighting.longitude.toFixed(4)}°E
+                {format(sightedAt, 'HH:mm')} · {sighting.latitude != null ? `${sighting.latitude.toFixed(4)}°N` : '— no GPS'} · {sighting.longitude != null ? `${sighting.longitude.toFixed(4)}°E` : ''}
               </Mono>
             </div>
-            <div style={{ height: 380, position: 'relative', background: DS.bone }}>
+            <div style={{
+              position: 'relative', background: DS.bone,
+              ...(photoUrl ? {} : { height: 380 }),
+            }}>
               {photoUrl ? (
                 <img src={photoUrl} alt="Sighting"
-                     style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                     style={{
+                       display: 'block', width: '100%', height: 'auto',
+                       maxHeight: '75vh', objectFit: 'contain',
+                     }} />
               ) : audioUrl ? (
                 <div style={{ position: 'relative', height: '100%' }}>
                   <PhotoPlaceholder hue="mist" height="100%" label="AUDIO ONLY · HEARD, NOT SEEN" />
@@ -211,7 +217,9 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
               an observation of <em>{sighting.common_name || sighting.scientific_name || 'an unknown species'}</em>
               {' '}at{' '}
               <span style={{ fontFamily: DS.mono, fontSize: 14 }}>
-                {sighting.latitude.toFixed(4)}°N, {sighting.longitude.toFixed(4)}°E
+                {sighting.latitude != null && sighting.longitude != null
+                  ? `${sighting.latitude.toFixed(4)}°N, ${sighting.longitude.toFixed(4)}°E`
+                  : 'an unrecorded location'}
               </span>.{' '}
               Confidence: <u style={{ textUnderlineOffset: 3 }}>{confidenceWord(conf)}</u>.
             </div>
@@ -223,8 +231,8 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
               {([
                 ['CATEGORY', sighting.category],
                 ['CONFIDENCE', conf > 0 ? `${Math.round(conf * 100)}%` : '—'],
-                ['LATITUDE', `${sighting.latitude.toFixed(6)}°`],
-                ['LONGITUDE', `${sighting.longitude.toFixed(6)}°`],
+                ['LATITUDE', sighting.latitude != null ? `${sighting.latitude.toFixed(6)}°` : '—'],
+                ['LONGITUDE', sighting.longitude != null ? `${sighting.longitude.toFixed(6)}°` : '—'],
                 ['GPS ACCURACY', sighting.location_accuracy ? `±${Math.round(sighting.location_accuracy)}m` : '—'],
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
               ] as [string, string | number][]).map(([k, v]) => (
