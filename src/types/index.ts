@@ -23,10 +23,15 @@ export interface Species {
   scientific_name: string | null
   category: SightingCategory
   subcategory: string | null
+  family: string | null
   description: string | null
   habitat: string | null
   reference_image_url: string | null
   gallery_image_urls: string[]
+  is_native: boolean | null
+  is_notable: boolean | null
+  inaturalist_taxon_id: number | null
+  ebird_species_code: string | null
   created_at: string
 }
 
