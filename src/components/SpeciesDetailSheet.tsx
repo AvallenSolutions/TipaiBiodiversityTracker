@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function SpeciesDetailSheet({ species, onClose }: Props) {
-  const { stats, loading } = useSpeciesStats(species.id)
+  const { stats, loading } = useSpeciesStats(species)
   const [activeImage, setActiveImage] = useState(species.reference_image_url)
 
   // Reset cover when sheet opens for a different species.
