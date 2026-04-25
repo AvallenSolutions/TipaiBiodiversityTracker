@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuth } from '@/context/AuthContext'
@@ -31,11 +31,35 @@ export default function NewSightingPage() {
   const { user } = useAuth()
   const { location, getLocation, error: locationError, loading: locationLoading } = useGeolocation()
   const [skipLocation, setSkipLocation] = useState(false)
+
+  // Reactive online state so banners update if the user toggles flight mode
+  // mid-flow. navigator.onLine alone isn't reactive across re-renders.
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const on = () => setIsOnline(true)
+    const off = () => setIsOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
   const { species, fetchSpecies } = useSpecies()
 
   const [step, setStep] = useState<Step>('camera')
   const [category, setCategory] = useState<SightingCategory | null>(null)
   const [capturedMedia, setCapturedMedia] = useState<CapturedMedia[]>([])
+
+  // Object URL for the most recent captured photo so the identify/entry
+  // steps can render a preview. Revoked on cleanup to avoid leaking.
+  const photoPreviewUrl = useMemo(() => {
+    const photo = [...capturedMedia].reverse().find(m => m.type === 'photo')
+    return photo ? URL.createObjectURL(photo.blob) : null
+  }, [capturedMedia])
+  useEffect(() => {
+    return () => { if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl) }
+  }, [photoPreviewUrl])
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -460,7 +484,20 @@ export default function NewSightingPage() {
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: DS.bone, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Mono size={10} color={DS.inkFaint} letter={0.22}>Photo preview</Mono>
+          {photoPreviewUrl ? (
+            <img src={photoPreviewUrl} alt="Captured sighting"
+                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <Mono size={10} color={DS.inkFaint} letter={0.22}>Photo preview</Mono>
+          )}
+          {!isOnline && (
+            <div style={{
+              position: 'absolute', top: 12, left: 12,
+              padding: '6px 10px', background: DS.rust,
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              textTransform: 'uppercase', color: DS.ivory,
+            }}>● Offline</div>
+          )}
         </div>
 
         <div style={{
@@ -547,12 +584,26 @@ export default function NewSightingPage() {
               </button>
             </>
           ) : (
-            <button onClick={() => setStep('entry')} style={{
-              background: 'transparent', border: 'none', padding: '20px',
-              cursor: 'pointer', textAlign: 'center',
-              fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
-              color: DS.ink,
-            }}>Continue without AI →</button>
+            <div style={{ padding: '20px 0' }}>
+              {!isOnline && (
+                <div style={{
+                  padding: '14px 16px', background: DS.bone,
+                  borderLeft: `2px solid ${DS.rust}`, marginBottom: 16,
+                }}>
+                  <Mono size={9} color={DS.rust} letter={0.18} style={{ marginBottom: 6 }}>● Offline · AI skipped</Mono>
+                  <div style={{ fontFamily: DS.serif, fontSize: 15, fontStyle: 'italic', fontWeight: 300, color: DS.ink, lineHeight: 1.5 }}>
+                    No connection — fill the entry on the next step. The sighting is held on the device and uploads automatically the next time you're online.
+                  </div>
+                </div>
+              )}
+              <button onClick={() => setStep('entry')} style={{
+                width: '100%', background: DS.ink, color: DS.ivory,
+                border: 'none', padding: '16px 20px',
+                cursor: 'pointer', textAlign: 'center',
+                fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
+                textTransform: 'uppercase', fontWeight: 500,
+              }}>{isOnline ? 'Continue without AI →' : 'Identify by hand →'}</button>
+            </div>
           )}
         </div>
       </div>
@@ -587,7 +638,30 @@ export default function NewSightingPage() {
           }}>← Back</button>
         </div>
 
+        {!isOnline && (
+          <div style={{
+            background: DS.rust, padding: '10px 20px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          }}>
+            <Mono size={10} color={DS.ivory} letter={0.18}>
+              ● OFFLINE · entry will be held on the device and synced on signal
+            </Mono>
+          </div>
+        )}
+
         <div style={{ flex: 1, overflow: 'auto' }}>
+          {photoPreviewUrl && (
+            <div style={{
+              padding: '18px 20px 0', display: 'flex', justifyContent: 'center',
+              background: DS.bone,
+            }}>
+              <img src={photoPreviewUrl} alt="Sighting"
+                   style={{
+                     display: 'block', width: '100%', height: 'auto',
+                     maxHeight: '32vh', objectFit: 'contain',
+                   }} />
+            </div>
+          )}
           <div style={{
             padding: '24px 22px 16px',
             fontFamily: DS.serif, fontSize: 18, fontWeight: 300, lineHeight: 1.75,
@@ -656,7 +730,7 @@ export default function NewSightingPage() {
               </Mono>
             </div>
           )}
-          {!navigator.onLine && (
+          {!isOnline && (
             <Mono size={9} color={DS.ochre} letter={0.18} style={{ display: 'block', marginBottom: 10, textAlign: 'center' }}>
               Offline · the entry will be held on the device and synced on signal
             </Mono>
@@ -680,11 +754,11 @@ export default function NewSightingPage() {
                 ? (locationLoading ? 'Acquiring GPS…' : 'Waiting for GPS…')
                 : skipLocation && !location
                   ? 'Save without location ⎘'
-                  : navigator.onLine
+                  : isOnline
                     ? 'Seal the entry ⎘'
                     : 'Save offline ⎘'}
           </button>
-          {!location && !navigator.onLine && (
+          {!location && !isOnline && (
             <button
               onClick={() => setSkipLocation(true)}
               disabled={skipLocation}

@@ -248,9 +248,16 @@ function SpeciesLibrary({
 // ─── Reserve Map ─────────────────────────────────────────────────────────────
 
 function ReserveMap({ sightings }: { sightings: Sighting[] }) {
-  if (!sightings.length) return null
-  const lats = sightings.map(s => s.latitude)
-  const lngs = sightings.map(s => s.longitude)
+  // Only sightings with a real GPS fix have a place on the map; offline
+  // entries that haven't been backfilled yet are omitted (they appear in
+  // the Review Queue instead so a naturalist can add coordinates).
+  const located = sightings.filter(
+    (s): s is Sighting & { latitude: number; longitude: number } =>
+      s.latitude != null && s.longitude != null
+  )
+  if (!located.length) return null
+  const lats = located.map(s => s.latitude)
+  const lngs = located.map(s => s.longitude)
   const minLat = Math.min(...lats), maxLat = Math.max(...lats)
   const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
   const padLat = (maxLat - minLat) * 0.1 || 0.01
@@ -271,7 +278,7 @@ function ReserveMap({ sightings }: { sightings: Sighting[] }) {
           backgroundImage: `linear-gradient(${DS.inkHair} 1px, transparent 1px), linear-gradient(90deg, ${DS.inkHair} 1px, transparent 1px)`,
           backgroundSize: '40px 40px',
         }} />
-        {sightings.map(s => {
+        {located.map(s => {
           const x = ((s.longitude - minLng + padLng) / (maxLng - minLng + padLng * 2)) * 100
           const y = 100 - ((s.latitude - minLat + padLat) / (maxLat - minLat + padLat * 2)) * 100
           const catColors: Record<string, string> = {
