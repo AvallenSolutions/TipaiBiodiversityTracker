@@ -23,21 +23,19 @@ DROP TABLE IF EXISTS public.sighting_edits CASCADE;
 DROP TABLE IF EXISTS public.sighting_media CASCADE;
 DROP TABLE IF EXISTS public.sightings        CASCADE;
 
--- 2. Ensure the canonical enums exist. These are idempotent.
-DO $$ BEGIN
-  CREATE TYPE verification_status AS ENUM ('unverified', 'ai_suggested', 'verified', 'rejected');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+-- 2. Drop and recreate the canonical enums. The live DB had drifted
+--    versions of these (e.g. export_status without a 'not_exported'
+--    value), and idempotent CREATE-IF-NOT-EXISTS would silently keep
+--    the wrong one. The tables that referenced them were dropped in
+--    step 1, so DROP TYPE is safe here.
+DROP TYPE IF EXISTS public.verification_status CASCADE;
+CREATE TYPE verification_status AS ENUM ('unverified', 'ai_suggested', 'verified', 'rejected');
 
-DO $$ BEGIN
-  CREATE TYPE export_status AS ENUM ('not_exported', 'pending', 'exported', 'excluded', 'failed');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+DROP TYPE IF EXISTS public.export_status CASCADE;
+CREATE TYPE export_status AS ENUM ('not_exported', 'pending', 'exported', 'excluded', 'failed');
 
-DO $$ BEGIN
-  CREATE TYPE media_type AS ENUM ('photo', 'video', 'audio');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+DROP TYPE IF EXISTS public.media_type CASCADE;
+CREATE TYPE media_type AS ENUM ('photo', 'video', 'audio');
 
 -- 3. Recreate sightings with the canonical column set.
 CREATE TABLE public.sightings (
