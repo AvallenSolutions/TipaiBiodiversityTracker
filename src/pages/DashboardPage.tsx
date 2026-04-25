@@ -39,17 +39,24 @@ export default function DashboardPage() {
 
     const onOnline = () => {
       setIsOnline(true)
+      fetchSightings()
       getPendingCount().then(setPendingCount).catch(() => {})
     }
     const onOffline = () => {
       setIsOnline(false)
       getPendingCount().then(setPendingCount).catch(() => {})
     }
+    const onFocus = () => fetchSightings()
+    const onVisibility = () => { if (document.visibilityState === 'visible') fetchSightings() }
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [fetchSightings])
 
