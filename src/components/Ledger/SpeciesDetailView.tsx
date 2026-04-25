@@ -167,7 +167,8 @@ export function SpeciesDetailView({ speciesName, sightings, onBack, onOpenSighti
                 color: DS.ink, marginTop: 6, lineHeight: 1.3,
               }}>{format(new Date(s.sighted_at), 'd MMM')}</div>
               <Mono size={9} letter={0.15} color={DS.inkSoft} style={{ marginTop: 4 }}>
-                {format(new Date(s.sighted_at), 'HH:mm')} · {s.latitude.toFixed(3)}°N
+                {format(new Date(s.sighted_at), 'HH:mm')}
+                {s.latitude != null ? ` · ${s.latitude.toFixed(3)}°N` : ''}
               </Mono>
               <div style={{
                 display: 'flex', justifyContent: 'space-between',
