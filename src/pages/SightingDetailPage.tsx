@@ -80,11 +80,12 @@ export default function SightingDetailPage() {
         <div style={{
           marginBottom: 24, position: 'relative',
           border: `1px solid ${DS.ink}`, overflow: 'hidden',
+          background: DS.bone,
         }}>
           <img
             src={getMediaUrl(currentMedia.storage_path)}
             alt={sighting.common_name || 'Sighting'}
-            style={{ width: '100%', display: 'block', maxHeight: 400, objectFit: 'cover' }}
+            style={{ width: '100%', display: 'block', maxHeight: 480, objectFit: 'contain' }}
           />
           {media.length > 1 && (
             <div style={{
