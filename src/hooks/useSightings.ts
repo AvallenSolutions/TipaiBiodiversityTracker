@@ -52,5 +52,21 @@ export function useSightings() {
     setSightings(prev => prev.filter(s => s.id !== id))
   }, [])
 
-  return { sightings, loading, error, fetchSightings, deleteSighting }
+  const updateSighting = useCallback(async (id: string, updates: Partial<Sighting>) => {
+    const { data, error } = await (supabase.from('sightings') as any)
+      .update(updates)
+      .eq('id', id)
+      .select('*, media:sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
+      .single()
+    if (error) throw error
+    const updated = data as Sighting
+    setSightings(prev => prev.map(s => s.id === id ? updated : s))
+    return updated
+  }, [])
+
+  const verifySighting = useCallback(async (id: string) => {
+    return updateSighting(id, { verification_status: 'verified' })
+  }, [updateSighting])
+
+  return { sightings, loading, error, fetchSightings, deleteSighting, updateSighting, verifySighting }
 }

@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { DS, normalizeConf } from '../../lib/ledger-design'
 import { supabase } from '../../lib/supabase'
+import { getMediaUrl } from '../../lib/storage'
 import { useSpecies } from '../../hooks/useSpecies'
+import { useSightings } from '../../hooks/useSightings'
 import { useAuth } from '../../context/AuthContext'
 import type { Sighting, SightingCategory } from '../../types'
 import { Mono, PhotoPlaceholder } from './shared'
@@ -15,11 +17,13 @@ function confidenceWord(conf: number): string {
 }
 
 function getPhotoUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'photo')?.url ?? null
+  const photo = s.media?.find(m => m.media_type === 'photo')
+  return photo ? getMediaUrl(photo.storage_path) : null
 }
 
 function getAudioUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'audio')?.url ?? null
+  const audio = s.media?.find(m => m.media_type === 'audio')
+  return audio ? getMediaUrl(audio.storage_path) : null
 }
 
 export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged }: {
@@ -37,10 +41,42 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
   const isSynced = sighting.verification_status === 'verified'
 
   const { profile } = useAuth()
-  const canPromote = profile?.role === 'naturalist' || profile?.role === 'admin'
+  const canManage = profile?.role === 'naturalist' || profile?.role === 'admin'
   const isManualEntry = !!sighting.common_name && !sighting.species_id
   const [showPromote, setShowPromote] = useState(false)
-  const [promoteError, setPromoteError] = useState<string | null>(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const { verifySighting, updateSighting, deleteSighting } = useSightings()
+
+  async function handleVerify() {
+    setActionError(null)
+    setVerifying(true)
+    try {
+      await verifySighting(sighting.id)
+      onChanged?.()
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to verify sighting')
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  async function handleDelete() {
+    setActionError(null)
+    setDeleting(true)
+    try {
+      await deleteSighting(sighting.id)
+      setShowDelete(false)
+      onChanged?.()
+    } catch (err: any) {
+      setActionError(err?.message || 'Failed to delete sighting')
+      setDeleting(false)
+    }
+  }
 
   return (
     <div style={{ padding: '28px 40px 80px', background: DS.paper, minHeight: '100vh' }}>
@@ -226,27 +262,63 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
             </div>
           </div>
 
-          <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {canPromote && isManualEntry && (
-              <button
-                onClick={() => { setPromoteError(null); setShowPromote(true) }}
-                style={{
-                  padding: '18px 22px', background: DS.ochre, color: DS.ink, border: 'none', cursor: 'pointer',
-                  fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}
-              >
-                <span>Add to species library</span>
-                <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 16, textTransform: 'none', letterSpacing: 0 }}>+ Promote</span>
-              </button>
-            )}
-            {promoteError && (
-              <div style={{
-                padding: '10px 14px', background: DS.rust, color: DS.ivory,
-                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
-              }}>{promoteError}</div>
-            )}
-          </div>
+          {canManage && (
+            <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {!isSynced && (
+                <button
+                  onClick={handleVerify}
+                  disabled={verifying}
+                  style={{
+                    padding: '18px 22px', background: DS.ink, color: DS.ivory,
+                    border: 'none', cursor: verifying ? 'not-allowed' : 'pointer',
+                    fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    opacity: verifying ? 0.5 : 1,
+                  }}
+                >
+                  <span>{verifying ? 'Verifying…' : 'Verify & seal the record'}</span>
+                  <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 16, textTransform: 'none', letterSpacing: 0 }}>⎘ Verify</span>
+                </button>
+              )}
+              {isManualEntry && (
+                <button
+                  onClick={() => { setActionError(null); setShowPromote(true) }}
+                  style={{
+                    padding: '18px 22px', background: DS.ochre, color: DS.ink, border: 'none', cursor: 'pointer',
+                    fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}
+                >
+                  <span>Add to species library</span>
+                  <span style={{ fontFamily: DS.serif, fontStyle: 'italic', fontSize: 16, textTransform: 'none', letterSpacing: 0 }}>+ Promote</span>
+                </button>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button
+                  onClick={() => { setActionError(null); setShowEdit(true) }}
+                  style={{
+                    padding: '14px 16px', background: 'transparent', color: DS.ink,
+                    border: `0.5px solid ${DS.ink}`, cursor: 'pointer',
+                    fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+                  }}
+                >Edit the record</button>
+                <button
+                  onClick={() => { setActionError(null); setShowDelete(true) }}
+                  style={{
+                    padding: '14px 16px', background: 'transparent', color: DS.rust,
+                    border: `0.5px solid ${DS.rust}`, cursor: 'pointer',
+                    fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+                  }}
+                >Delete</button>
+              </div>
+              {actionError && (
+                <div style={{
+                  padding: '10px 14px', background: DS.rust, color: DS.ivory,
+                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+                }}>{actionError}</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -254,11 +326,37 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
         <PromoteToSpeciesSheet
           sighting={sighting}
           onClose={() => setShowPromote(false)}
-          onError={setPromoteError}
+          onError={setActionError}
           onPromoted={() => {
             setShowPromote(false)
             onChanged?.()
           }}
+        />
+      )}
+
+      {showEdit && (
+        <EditSightingSheet
+          sighting={sighting}
+          onClose={() => setShowEdit(false)}
+          onError={setActionError}
+          onSaved={async (updates) => {
+            try {
+              await updateSighting(sighting.id, updates)
+              setShowEdit(false)
+              onChanged?.()
+            } catch (err: any) {
+              setActionError(err?.message || 'Failed to save changes')
+            }
+          }}
+        />
+      )}
+
+      {showDelete && (
+        <DeleteConfirmSheet
+          sighting={sighting}
+          deleting={deleting}
+          onCancel={() => setShowDelete(false)}
+          onConfirm={handleDelete}
         />
       )}
     </div>
@@ -403,6 +501,206 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <Mono size={9} letter={0.2} color={DS.inkSoft} style={{ marginBottom: 6 }}>{label}</Mono>
       {children}
+    </div>
+  )
+}
+
+const SIGHTING_CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace']
+const VERIFICATION_OPTIONS: { value: Sighting['verification_status']; label: string }[] = [
+  { value: 'unverified',    label: 'Unverified' },
+  { value: 'ai_suggested',  label: 'AI suggested' },
+  { value: 'verified',      label: 'Verified' },
+  { value: 'rejected',      label: 'Rejected' },
+]
+
+function EditSightingSheet({
+  sighting, onClose, onSaved, onError,
+}: {
+  sighting: Sighting
+  onClose: () => void
+  onSaved: (updates: Partial<Sighting>) => void | Promise<void>
+  onError: (msg: string) => void
+}) {
+  const [common, setCommon] = useState(sighting.common_name ?? '')
+  const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
+  const [category, setCategory] = useState<SightingCategory>(sighting.category)
+  const [count, setCount] = useState<string>(sighting.individual_count != null ? String(sighting.individual_count) : '')
+  const [notes, setNotes] = useState(sighting.notes ?? '')
+  const [status, setStatus] = useState<Sighting['verification_status']>(sighting.verification_status)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      const parsedCount = count.trim() === '' ? null : Math.max(0, Math.floor(Number(count) || 0))
+      await onSaved({
+        common_name: common.trim() || null,
+        scientific_name: scientific.trim() || null,
+        category,
+        individual_count: parsedCount,
+        notes: notes.trim() || null,
+        verification_status: status,
+      })
+    } catch (err: any) {
+      onError(err?.message || 'Failed to save changes')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '12px 14px',
+    border: `0.5px solid ${DS.inkFaint}`, background: DS.bone,
+    fontFamily: DS.serif, fontSize: 16, fontWeight: 400,
+    color: DS.ink, outline: 'none',
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 90,
+        background: 'rgba(11,14,12,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: DS.ivory, padding: '22px 24px',
+          maxWidth: 560, width: '100%', maxHeight: '90vh', overflow: 'auto',
+          border: `1px solid ${DS.ink}`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 12, borderBottom: `1px solid ${DS.ink}` }}>
+          <Mono size={10} letter={0.2} color={DS.ochre}>◆ Edit the record</Mono>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.2em',
+            color: DS.inkSoft, textTransform: 'uppercase',
+          }}>Cancel</button>
+        </div>
+
+        <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="Common name">
+            <input value={common} onChange={(e) => setCommon(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Scientific name">
+            <input value={scientific} onChange={(e) => setScientific(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Category">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {SIGHTING_CATEGORIES.map(c => (
+                <button key={c} onClick={() => setCategory(c)} style={{
+                  padding: '8px 12px',
+                  background: category === c ? DS.ink : 'transparent',
+                  color: category === c ? DS.ivory : DS.ink,
+                  border: `0.5px solid ${category === c ? DS.ink : DS.inkFaint}`,
+                  cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                }}>{c}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Individual count">
+            <input type="number" min="0" value={count} onChange={(e) => setCount(e.target.value)} style={inputStyle} />
+          </Field>
+          <Field label="Notes">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+              style={{ ...inputStyle, minHeight: 90, resize: 'vertical' }} />
+          </Field>
+          <Field label="Verification status">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {VERIFICATION_OPTIONS.map(opt => (
+                <button key={opt.value} onClick={() => setStatus(opt.value)} style={{
+                  padding: '8px 12px',
+                  background: status === opt.value ? DS.forest : 'transparent',
+                  color: status === opt.value ? DS.ivory : DS.ink,
+                  border: `0.5px solid ${status === opt.value ? DS.forest : DS.inkFaint}`,
+                  cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </Field>
+          <Mono size={8} letter={0.2} color={DS.inkFaint}>
+            Coordinates, photos, and timestamp describe the field record itself and can't be edited.
+          </Mono>
+        </div>
+
+        <button onClick={handleSubmit} disabled={submitting}
+          style={{
+            marginTop: 22, width: '100%', padding: '16px 20px',
+            background: submitting ? DS.inkFaint : DS.ochre,
+            color: DS.ink, border: 'none',
+            cursor: submitting ? 'not-allowed' : 'pointer',
+            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
+            textTransform: 'uppercase', fontWeight: 500,
+          }}
+        >
+          {submitting ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DeleteConfirmSheet({
+  sighting, deleting, onCancel, onConfirm,
+}: {
+  sighting: Sighting
+  deleting: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 90,
+        background: 'rgba(11,14,12,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: DS.ivory, padding: '24px 26px',
+          maxWidth: 460, width: '100%',
+          border: `1px solid ${DS.rust}`,
+        }}
+      >
+        <Mono size={10} letter={0.2} color={DS.rust}>◆ Delete this record?</Mono>
+        <h2 style={{
+          fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+          letterSpacing: '-0.01em', margin: '12px 0 6px', color: DS.ink,
+        }}>
+          {sighting.common_name || 'Unidentified sighting'}
+        </h2>
+        <p style={{
+          fontFamily: DS.serif, fontSize: 15, fontWeight: 300, fontStyle: 'italic',
+          color: DS.inkSoft, margin: '0 0 18px', lineHeight: 1.5,
+        }}>
+          This will permanently remove the sighting and any attached media. This action cannot be undone.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <button onClick={onCancel} disabled={deleting} style={{
+            padding: '14px 16px', background: 'transparent', color: DS.ink,
+            border: `0.5px solid ${DS.ink}`, cursor: deleting ? 'not-allowed' : 'pointer',
+            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase',
+          }}>Cancel</button>
+          <button onClick={onConfirm} disabled={deleting} style={{
+            padding: '14px 16px', background: DS.rust, color: DS.ivory,
+            border: 'none', cursor: deleting ? 'not-allowed' : 'pointer',
+            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase',
+            opacity: deleting ? 0.6 : 1,
+          }}>{deleting ? 'Deleting…' : 'Delete'}</button>
+        </div>
+      </div>
     </div>
   )
 }
