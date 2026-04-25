@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { DS } from '../../lib/ledger-design'
+import { getMediaUrl } from '../../lib/storage'
 import type { Sighting } from '../../types'
 import { Mono, PhotoPlaceholder, TrendChart } from './shared'
 import { buildSpeciesLibrary } from './Desk'
 
 function getPhotoUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'photo')?.url ?? null
+  const photo = s.media?.find(m => m.media_type === 'photo')
+  return photo ? getMediaUrl(photo.storage_path) : null
 }
 
 export function SpeciesDetailView({ speciesName, sightings, onBack, onOpenSighting }: {

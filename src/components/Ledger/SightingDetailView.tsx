@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { DS, normalizeConf } from '../../lib/ledger-design'
 import { supabase } from '../../lib/supabase'
+import { getMediaUrl } from '../../lib/storage'
 import { useSpecies } from '../../hooks/useSpecies'
 import { useAuth } from '../../context/AuthContext'
 import type { Sighting, SightingCategory } from '../../types'
@@ -15,11 +16,13 @@ function confidenceWord(conf: number): string {
 }
 
 function getPhotoUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'photo')?.url ?? null
+  const photo = s.media?.find(m => m.media_type === 'photo')
+  return photo ? getMediaUrl(photo.storage_path) : null
 }
 
 function getAudioUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'audio')?.url ?? null
+  const audio = s.media?.find(m => m.media_type === 'audio')
+  return audio ? getMediaUrl(audio.storage_path) : null
 }
 
 export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged }: {

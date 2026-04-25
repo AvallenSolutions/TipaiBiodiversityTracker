@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatDistanceToNow, format, subMonths, startOfMonth } from 'date-fns'
 import { DS, normalizeConf, getFlag, catLetter } from '../../lib/ledger-design'
+import { getMediaUrl } from '../../lib/storage'
 import type { Sighting } from '../../types'
 import { Mono, PhotoPlaceholder, StatBlock, CatDot, ConfPill, FlagTag, Sparkline } from './shared'
 
@@ -69,7 +70,8 @@ export function buildDailyTrend(sightings: Sighting[], days = 30): number[] {
 }
 
 function getPhotoUrl(s: Sighting): string | null {
-  return s.media?.find(m => m.media_type === 'photo')?.url ?? null
+  const photo = s.media?.find(m => m.media_type === 'photo')
+  return photo ? getMediaUrl(photo.storage_path) : null
 }
 
 // ─── Review Queue ───────────────────────────────────────────────────────────
