@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { DS, normalizeConf } from '../../lib/ledger-design'
 import { supabase } from '../../lib/supabase'
@@ -422,7 +422,7 @@ function PromoteToSpeciesSheet({
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 90,
+        position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(11,14,12,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
@@ -524,16 +524,47 @@ function EditSightingSheet({
   const [common, setCommon] = useState(sighting.common_name ?? '')
   const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
   const [category, setCategory] = useState<SightingCategory>(sighting.category)
+  const [linkedSpeciesId, setLinkedSpeciesId] = useState<string | null>(sighting.species_id)
   const [count, setCount] = useState<string>(sighting.individual_count != null ? String(sighting.individual_count) : '')
   const [notes, setNotes] = useState(sighting.notes ?? '')
   const [status, setStatus] = useState<Sighting['verification_status']>(sighting.verification_status)
   const [submitting, setSubmitting] = useState(false)
+
+  const { species: librarySpecies, fetchSpecies } = useSpecies()
+
+  useEffect(() => {
+    const t = setTimeout(() => fetchSpecies(undefined, common.trim() || undefined), 250)
+    return () => clearTimeout(t)
+  }, [common, fetchSpecies])
+
+  // Once the typed common name diverges from the linked library row,
+  // drop the link so we don't save a stale species_id.
+  const linkedSpecies = linkedSpeciesId
+    ? librarySpecies.find(s => s.id === linkedSpeciesId) ?? null
+    : null
+  useEffect(() => {
+    if (linkedSpeciesId && linkedSpecies && linkedSpecies.common_name !== common) {
+      setLinkedSpeciesId(null)
+    }
+  }, [common, linkedSpeciesId, linkedSpecies])
+
+  const matches = common.trim().length >= 2
+    ? librarySpecies.filter(sp => sp.id !== linkedSpeciesId).slice(0, 6)
+    : []
+
+  function pickFromLibrary(sp: import('../../types').Species) {
+    setCommon(sp.common_name)
+    setScientific(sp.scientific_name ?? '')
+    setCategory(sp.category)
+    setLinkedSpeciesId(sp.id)
+  }
 
   async function handleSubmit() {
     setSubmitting(true)
     try {
       const parsedCount = count.trim() === '' ? null : Math.max(0, Math.floor(Number(count) || 0))
       await onSaved({
+        species_id: linkedSpeciesId,
         common_name: common.trim() || null,
         scientific_name: scientific.trim() || null,
         category,
@@ -559,7 +590,7 @@ function EditSightingSheet({
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 90,
+        position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(11,14,12,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
@@ -584,7 +615,52 @@ function EditSightingSheet({
 
         <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field label="Common name">
-            <input value={common} onChange={(e) => setCommon(e.target.value)} style={inputStyle} />
+            <input value={common} onChange={(e) => setCommon(e.target.value)} style={inputStyle} placeholder="Type to search the library or enter a new name" />
+            {linkedSpecies && (
+              <Mono size={8} letter={0.2} color={DS.forest} style={{ marginTop: 6 }}>
+                ✓ Linked to library: {linkedSpecies.common_name}
+              </Mono>
+            )}
+            {!linkedSpecies && matches.length > 0 && (
+              <div style={{ marginTop: 8, border: `0.5px solid ${DS.inkHair}`, background: DS.bone }}>
+                <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ padding: '8px 12px', borderBottom: `0.5px solid ${DS.inkHair}` }}>
+                  In the library
+                </Mono>
+                {matches.map((sp, i) => (
+                  <button
+                    key={sp.id}
+                    onClick={() => pickFromLibrary(sp)}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
+                      padding: '10px 12px', textAlign: 'left', width: '100%',
+                      background: 'transparent', border: 'none',
+                      borderBottom: i < matches.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontFamily: DS.serif, fontSize: 15, fontWeight: 400, color: DS.ink,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{sp.common_name}</div>
+                      {sp.scientific_name && (
+                        <div style={{
+                          fontFamily: DS.serif, fontSize: 12, fontStyle: 'italic',
+                          fontWeight: 300, color: DS.inkSoft,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{sp.scientific_name}</div>
+                      )}
+                    </div>
+                    <Mono size={8} letter={0.18} color={DS.inkFaint}>{sp.category.toUpperCase()}</Mono>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!linkedSpecies && common.trim().length >= 2 && matches.length === 0 && (
+              <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginTop: 6 }}>
+                Not in library — saving will keep this as a manual entry. Use "Add to species library" on the record to promote it.
+              </Mono>
+            )}
           </Field>
           <Field label="Scientific name">
             <input value={scientific} onChange={(e) => setScientific(e.target.value)} style={inputStyle} />
@@ -660,7 +736,7 @@ function DeleteConfirmSheet({
     <div
       onClick={onCancel}
       style={{
-        position: 'fixed', inset: 0, zIndex: 90,
+        position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(11,14,12,0.55)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 20,
