@@ -33,8 +33,13 @@ export default function HomePage() {
     }
   }, [fetchSightings])
 
+  // Count distinct species by name. species_id is reserved for a future
+  // link to the reference table; new sightings persist their AI-suggested
+  // common/scientific name directly, so bucket on those.
   const uniqueSpecies = new Set(
-    sightings.filter(s => s.species_id).map(s => s.species_id)
+    sightings
+      .map(s => s.common_name || s.scientific_name)
+      .filter((n): n is string => !!n)
   ).size
   const uniqueCategories = new Set(sightings.map(s => s.category)).size
 
