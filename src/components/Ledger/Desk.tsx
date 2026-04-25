@@ -85,7 +85,10 @@ function ReviewQueue({
   const flagged = useMemo(() =>
     sightings.filter(s => {
       const conf = normalizeConf(s.ai_confidence)
-      return !!getFlag(conf, !s.common_name) || s.verification_status === 'unverified'
+      const isManual = !!s.common_name && !s.species_id
+      return !!getFlag(conf, !s.common_name)
+        || s.verification_status === 'unverified'
+        || isManual
     }), [sightings])
 
   const displayed = showFlagged ? flagged : sightings.slice(0, 20)
@@ -152,6 +155,7 @@ function ReviewQueue({
                     color: DS.ink, lineHeight: 1.2,
                   }}>{s.common_name || <em style={{ color: DS.inkSoft }}>Unidentified</em>}</span>
                   {flag && <FlagTag label={flag} />}
+                  {s.common_name && !s.species_id && <FlagTag label="MANUAL" />}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <CatDot cat={s.category} />
@@ -310,7 +314,10 @@ export function Desk({
   const flaggedCount = useMemo(() =>
     sightings.filter(s => {
       const conf = normalizeConf(s.ai_confidence)
-      return !!getFlag(conf, !s.common_name) || s.verification_status === 'unverified'
+      const isManual = !!s.common_name && !s.species_id
+      return !!getFlag(conf, !s.common_name)
+        || s.verification_status === 'unverified'
+        || isManual
     }).length, [sightings])
 
   const tigers = useMemo(() =>

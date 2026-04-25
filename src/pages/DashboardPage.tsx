@@ -132,6 +132,7 @@ export default function DashboardPage() {
             || selectedSighting.scientific_name
             || `Unknown ${selectedSighting.category}`
           )}
+          onChanged={() => { fetchSightings(); setView('desk') }}
         />
       )}
 
