@@ -1,5 +1,7 @@
 import { format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 import { DS } from '../../lib/ledger-design'
+import { useAuth } from '../../context/AuthContext'
 import { Mono, Rule } from './shared'
 import type { Sighting } from '../../types'
 
@@ -15,10 +17,23 @@ export function Masthead({
   onSignOut: () => void
   userInitials: string
 }) {
+  const navigate = useNavigate()
+  const { profile } = useAuth()
+
   const tabs: { id: LedgerView; label: string }[] = [
     { id: 'desk', label: 'Front Desk' },
     { id: 'sighting', label: 'Sighting' },
     { id: 'species', label: 'Species' },
+  ]
+
+  const appNav: { path: string; label: string; active?: boolean }[] = [
+    { path: '/',          label: 'Feed' },
+    { path: '/new',       label: 'Log' },
+    { path: '/species',   label: 'Library' },
+    { path: '/dashboard', label: 'Ledger', active: true },
+    ...(profile?.role === 'admin'
+      ? [{ path: '/admin', label: 'Admin' }]
+      : []),
   ]
 
   const now = new Date()
@@ -47,13 +62,35 @@ export function Masthead({
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         borderTop: `3px double ${DS.ink}`, paddingTop: 14, paddingBottom: 10,
+        flexWrap: 'wrap', gap: 16,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0 }}>
           <img src="/wildlife-luxuries-logo.png" alt="Wildlife Luxuries"
                style={{ height: 46, width: 'auto', display: 'block' }} />
           <div style={{ borderLeft: `0.5px solid ${DS.inkFaint}`, height: 32 }} />
           <Mono size={9} color={DS.inkSoft}>The Ledger · Wildlife Luxuries</Mono>
         </div>
+
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 0 }} aria-label="Site sections">
+          {appNav.map((item, idx) => (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                background: item.active ? DS.ink : 'transparent',
+                color: item.active ? DS.ivory : DS.ink,
+                border: `0.5px solid ${DS.ink}`,
+                marginLeft: idx === 0 ? 0 : -0.5,
+                cursor: 'pointer',
+                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.2em',
+                textTransform: 'uppercase', padding: '8px 14px',
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <Mono size={9} color={DS.inkSoft}>{today} · {dayName}</Mono>
           <button onClick={onSignOut} style={{
