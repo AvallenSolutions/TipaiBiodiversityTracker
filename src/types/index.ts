@@ -25,7 +25,8 @@ export interface Species {
   subcategory: string | null
   description: string | null
   habitat: string | null
-  image_url: string | null
+  reference_image_url: string | null
+  gallery_image_urls: string[]
   created_at: string
 }
 

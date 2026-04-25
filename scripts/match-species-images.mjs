@@ -28,6 +28,12 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
   process.exit(1)
 }
 
+// Manual filename → species common_name overrides for cases the heuristic
+// misses (e.g. spelling typos in the uploaded filenames).
+const FILENAME_OVERRIDES = {
+  'GOLDEN_DARLTET_schnura_aurora.jpg': 'Golden Dartlet', // typo: DARLTET → DARTLET, schnura → Ischnura
+}
+
 // --- normalize a string for matching: strip non-alphanumerics, lowercase ----
 const norm = (s) =>
   s
@@ -131,9 +137,15 @@ for (const file of filenames) {
   const { variants, order, scientific } = candidatesFromFilename(file)
   let hit = null
   let via = null
-  for (const v of variants) {
-    const sp = byCommon.get(norm(v))
-    if (sp) { hit = sp; via = `common:${v}`; break }
+  if (FILENAME_OVERRIDES[file]) {
+    const sp = byCommon.get(norm(FILENAME_OVERRIDES[file]))
+    if (sp) { hit = sp; via = `override:${FILENAME_OVERRIDES[file]}` }
+  }
+  if (!hit) {
+    for (const v of variants) {
+      const sp = byCommon.get(norm(v))
+      if (sp) { hit = sp; via = `common:${v}`; break }
+    }
   }
   if (!hit && scientific) {
     const sp = bySci.get(norm(scientific))
@@ -200,11 +212,13 @@ console.log('Applying updates...')
 let ok = 0
 let fail = 0
 for (const [id, list] of matchedBySpeciesId) {
-  const url = `/species-images/${list[0].file}` // _01 / lowest-order canonical
+  const cover = `/species-images/${list[0].file}` // _01 / lowest-order canonical
+  const gallery = list.slice(1).map((x) => `/species-images/${x.file}`)
+  const body = { reference_image_url: cover, gallery_image_urls: gallery }
   const r = await fetch(`${SUPABASE_URL}/rest/v1/species?id=eq.${id}`, {
     method: 'PATCH',
     headers: { ...headers, Prefer: 'return=minimal' },
-    body: JSON.stringify({ reference_image_url: url }),
+    body: JSON.stringify(body),
   })
   if (r.ok) ok++
   else {
