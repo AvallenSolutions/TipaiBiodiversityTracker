@@ -473,25 +473,45 @@ export default function NewSightingPage() {
             </div>
           ) : aiSuggestions.length > 0 ? (
             <>
-              {(() => {
-                const primary = aiSuggestions[0] ?? null
-                return primary ? (
-                  <button onClick={() => { setSelectedSpecies(primary); setStep('entry'); }} style={{
-                    textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
-                    padding: '20px 0 22px', borderBottom: `0.5px solid ${DS.inkHair}`,
-                  }}>
-                    <Mono size={9} letter={0.2} color={DS.inkSoft}>MAM · PRIMARY</Mono>
-                    <div style={{
-                      fontFamily: DS.serif, fontSize: 36, fontWeight: 300,
-                      color: DS.ink, letterSpacing: '-0.02em', lineHeight: 1, marginTop: 8,
-                    }}>{primary.common_name}</div>
-                    <div style={{
-                      fontFamily: DS.serif, fontSize: 16, fontStyle: 'italic',
-                      fontWeight: 300, color: DS.inkSoft, marginTop: 4,
-                    }}>{primary.scientific_name}</div>
+              {aiSuggestions.map((s, idx) => {
+                const isPrimary = idx === 0
+                const cat = (s.category ?? category ?? 'sub').toString().slice(0, 3).toUpperCase()
+                const label = isPrimary ? `${cat} · PRIMARY` : `${cat} · ALT ${String(idx + 1).padStart(2, '0')}`
+                const confPct = Math.round(normalizeConf(s.confidence) * 100)
+                return (
+                  <button
+                    key={`${s.common_name}-${idx}`}
+                    onClick={() => { setSelectedSpecies(s); setStep('entry') }}
+                    style={{
+                      textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: isPrimary ? '20px 0 22px' : '16px 0 18px',
+                      borderBottom: `0.5px solid ${DS.inkHair}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                    }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <Mono size={9} letter={0.2} color={DS.inkSoft}>{label}</Mono>
+                      <div style={{
+                        fontFamily: DS.serif,
+                        fontSize: isPrimary ? 36 : 22,
+                        fontWeight: 300,
+                        color: DS.ink, letterSpacing: '-0.02em',
+                        lineHeight: 1.05, marginTop: 8,
+                      }}>{s.common_name}</div>
+                      {s.scientific_name && (
+                        <div style={{
+                          fontFamily: DS.serif,
+                          fontSize: isPrimary ? 16 : 13,
+                          fontStyle: 'italic', fontWeight: 300, color: DS.inkSoft, marginTop: 4,
+                        }}>{s.scientific_name}</div>
+                      )}
+                    </div>
+                    {!isPrimary && confPct > 0 && (
+                      <Mono size={9} color={DS.inkSoft} letter={0.18}>{confPct}%</Mono>
+                    )}
                   </button>
-                ) : null
-              })()}
+                )
+              })}
 
               <button onClick={() => { setSelectedSpecies(null); setStep('entry'); }} style={{
                 background: 'transparent', border: 'none', padding: '16px 0 24px',
