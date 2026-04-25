@@ -1,7 +1,7 @@
 import type { AISuggestion, SightingCategory } from '@/types'
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
-const MODEL = 'gemini-2.5-flash'
+const MODEL = 'gemini-flash-latest'
 
 const CATEGORY_VALUES = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace'] as const
 
