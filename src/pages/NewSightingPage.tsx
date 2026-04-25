@@ -194,7 +194,7 @@ export default function NewSightingPage() {
           mediaRecords.push({ path, type: m.type, mime: m.blob.type })
         }
 
-        await (supabase.from('sightings') as any).insert({
+        const { error: sightingError } = await (supabase.from('sightings') as any).insert({
           id: sightingId,
           user_id: user.id,
           species_id: null,
@@ -210,9 +210,10 @@ export default function NewSightingPage() {
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
           individual_count: count,
         })
+        if (sightingError) throw sightingError
 
         if (mediaRecords.length > 0) {
-          await (supabase.from('sighting_media') as any).insert(
+          const { error: mediaError } = await (supabase.from('sighting_media') as any).insert(
             mediaRecords.map((m, i) => ({
               id: uuidv4(),
               sighting_id: sightingId,
@@ -222,6 +223,7 @@ export default function NewSightingPage() {
               size_bytes: capturedMedia[i]!.blob.size,
             }))
           )
+          if (mediaError) throw mediaError
         }
       } else {
         await savePendingSighting({
