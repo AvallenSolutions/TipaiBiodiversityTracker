@@ -17,6 +17,20 @@ export default function HomePage() {
   useEffect(() => {
     fetchSightings()
     getPendingCount().then(setPendingCount).catch(() => {})
+
+    const refresh = () => {
+      fetchSightings()
+      getPendingCount().then(setPendingCount).catch(() => {})
+    }
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh() }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('online', refresh)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('online', refresh)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [fetchSightings])
 
   const uniqueSpecies = new Set(
