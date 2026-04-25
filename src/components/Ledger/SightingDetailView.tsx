@@ -525,38 +525,45 @@ function EditSightingSheet({
   const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
   const [category, setCategory] = useState<SightingCategory>(sighting.category)
   const [linkedSpeciesId, setLinkedSpeciesId] = useState<string | null>(sighting.species_id)
+  const [linkedSpeciesSnapshot, setLinkedSpeciesSnapshot] = useState<import('../../types').Species | null>(null)
   const [count, setCount] = useState<string>(sighting.individual_count != null ? String(sighting.individual_count) : '')
   const [notes, setNotes] = useState(sighting.notes ?? '')
   const [status, setStatus] = useState<Sighting['verification_status']>(sighting.verification_status)
   const [submitting, setSubmitting] = useState(false)
 
-  const { species: librarySpecies, fetchSpecies } = useSpecies()
+  const [librarySearch, setLibrarySearch] = useState('')
+  const { species: librarySpecies, fetchSpecies, loading: libraryLoading } = useSpecies()
 
+  // Debounced library search. Empty search returns the first page from the
+  // backend so the picker still has something to scroll on first open.
   useEffect(() => {
-    const t = setTimeout(() => fetchSpecies(undefined, common.trim() || undefined), 250)
+    const t = setTimeout(() => fetchSpecies(undefined, librarySearch.trim() || undefined), 200)
     return () => clearTimeout(t)
-  }, [common, fetchSpecies])
+  }, [librarySearch, fetchSpecies])
 
-  // Once the typed common name diverges from the linked library row,
-  // drop the link so we don't save a stale species_id.
-  const linkedSpecies = linkedSpeciesId
-    ? librarySpecies.find(s => s.id === linkedSpeciesId) ?? null
-    : null
+  // Hold onto the linked row from the most recent search result so the
+  // confirmation chip still displays its name even after a new search
+  // pages it out.
   useEffect(() => {
-    if (linkedSpeciesId && linkedSpecies && linkedSpecies.common_name !== common) {
-      setLinkedSpeciesId(null)
-    }
-  }, [common, linkedSpeciesId, linkedSpecies])
+    if (!linkedSpeciesId) { setLinkedSpeciesSnapshot(null); return }
+    const found = librarySpecies.find(s => s.id === linkedSpeciesId)
+    if (found) setLinkedSpeciesSnapshot(found)
+  }, [linkedSpeciesId, librarySpecies])
 
-  const matches = common.trim().length >= 2
-    ? librarySpecies.filter(sp => sp.id !== linkedSpeciesId).slice(0, 6)
-    : []
+  const linkedSpecies = linkedSpeciesSnapshot
 
   function pickFromLibrary(sp: import('../../types').Species) {
+    setLinkedSpeciesId(sp.id)
+    setLinkedSpeciesSnapshot(sp)
     setCommon(sp.common_name)
     setScientific(sp.scientific_name ?? '')
     setCategory(sp.category)
-    setLinkedSpeciesId(sp.id)
+    setLibrarySearch('')
+  }
+
+  function clearLink() {
+    setLinkedSpeciesId(null)
+    setLinkedSpeciesSnapshot(null)
   }
 
   async function handleSubmit() {
@@ -585,6 +592,16 @@ function EditSightingSheet({
     fontFamily: DS.serif, fontSize: 16, fontWeight: 400,
     color: DS.ink, outline: 'none',
   }
+  const lockedInputStyle: React.CSSProperties = {
+    ...inputStyle,
+    background: DS.paper,
+    color: DS.inkSoft,
+  }
+
+  const isLinked = !!linkedSpeciesId
+  const visibleMatches = librarySpecies
+    .filter(sp => sp.id !== linkedSpeciesId)
+    .slice(0, 8)
 
   return (
     <div
@@ -614,69 +631,125 @@ function EditSightingSheet({
         </div>
 
         <div style={{ paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Field label="Common name">
-            <input value={common} onChange={(e) => setCommon(e.target.value)} style={inputStyle} placeholder="Type to search the library or enter a new name" />
-            {linkedSpecies && (
-              <Mono size={8} letter={0.2} color={DS.forest} style={{ marginTop: 6 }}>
-                ✓ Linked to library: {linkedSpecies.common_name}
-              </Mono>
-            )}
-            {!linkedSpecies && matches.length > 0 && (
-              <div style={{ marginTop: 8, border: `0.5px solid ${DS.inkHair}`, background: DS.bone }}>
-                <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ padding: '8px 12px', borderBottom: `0.5px solid ${DS.inkHair}` }}>
-                  In the library
-                </Mono>
-                {matches.map((sp, i) => (
-                  <button
-                    key={sp.id}
-                    onClick={() => pickFromLibrary(sp)}
-                    style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
-                      padding: '10px 12px', textAlign: 'left', width: '100%',
-                      background: 'transparent', border: 'none',
-                      borderBottom: i < matches.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{
-                        fontFamily: DS.serif, fontSize: 15, fontWeight: 400, color: DS.ink,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{sp.common_name}</div>
-                      {sp.scientific_name && (
-                        <div style={{
-                          fontFamily: DS.serif, fontSize: 12, fontStyle: 'italic',
-                          fontWeight: 300, color: DS.inkSoft,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        }}>{sp.scientific_name}</div>
-                      )}
-                    </div>
-                    <Mono size={8} letter={0.18} color={DS.inkFaint}>{sp.category.toUpperCase()}</Mono>
-                  </button>
-                ))}
+          {/* Library picker — primary path */}
+          <Field label="Species (from the library)">
+            {isLinked && linkedSpecies ? (
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                padding: '12px 14px',
+                border: `0.5px solid ${DS.forest}`, background: DS.bone,
+              }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <Mono size={8} letter={0.2} color={DS.forest} style={{ marginBottom: 4 }}>✓ Linked to library</Mono>
+                  <div style={{
+                    fontFamily: DS.serif, fontSize: 17, fontWeight: 400, color: DS.ink,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{linkedSpecies.common_name}</div>
+                  {linkedSpecies.scientific_name && (
+                    <div style={{
+                      fontFamily: DS.serif, fontSize: 13, fontStyle: 'italic', fontWeight: 300, color: DS.inkSoft,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{linkedSpecies.scientific_name}</div>
+                  )}
+                </div>
+                <button onClick={clearLink} style={{
+                  background: 'transparent', border: `0.5px solid ${DS.inkFaint}`,
+                  padding: '6px 12px', cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
+                  textTransform: 'uppercase', color: DS.inkSoft,
+                }}>× Clear</button>
               </div>
-            )}
-            {!linkedSpecies && common.trim().length >= 2 && matches.length === 0 && (
-              <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginTop: 6 }}>
-                Not in library — saving will keep this as a manual entry. Use "Add to species library" on the record to promote it.
-              </Mono>
+            ) : (
+              <>
+                <input
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  placeholder="Search the library by common or scientific name…"
+                  style={inputStyle}
+                />
+                <div style={{
+                  marginTop: 8, border: `0.5px solid ${DS.inkHair}`, background: DS.bone,
+                  maxHeight: 220, overflowY: 'auto',
+                }}>
+                  {libraryLoading && visibleMatches.length === 0 ? (
+                    <div style={{ padding: '14px 12px' }}>
+                      <Mono size={9} color={DS.inkFaint}>⋯ Loading library</Mono>
+                    </div>
+                  ) : visibleMatches.length === 0 ? (
+                    <div style={{ padding: '14px 12px' }}>
+                      <Mono size={9} color={DS.inkFaint}>
+                        No matches. If the species isn't in the library, close this modal and use "Add to species library".
+                      </Mono>
+                    </div>
+                  ) : (
+                    visibleMatches.map((sp, i) => (
+                      <button
+                        key={sp.id}
+                        onClick={() => pickFromLibrary(sp)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
+                          padding: '10px 12px', textAlign: 'left', width: '100%',
+                          background: 'transparent', border: 'none',
+                          borderBottom: i < visibleMatches.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            fontFamily: DS.serif, fontSize: 15, fontWeight: 400, color: DS.ink,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>{sp.common_name}</div>
+                          {sp.scientific_name && (
+                            <div style={{
+                              fontFamily: DS.serif, fontSize: 12, fontStyle: 'italic', fontWeight: 300, color: DS.inkSoft,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>{sp.scientific_name}</div>
+                          )}
+                        </div>
+                        <Mono size={8} letter={0.18} color={DS.inkFaint}>{sp.category.toUpperCase()}</Mono>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <Mono size={8} letter={0.2} color={DS.inkFaint} style={{ marginTop: 6 }}>
+                  Pick a library entry to auto-fill name, scientific name, and category. To save without a library link (manual entry), edit the fields below directly.
+                </Mono>
+              </>
             )}
           </Field>
+
+          <Field label="Common name">
+            <input
+              value={common} onChange={(e) => setCommon(e.target.value)}
+              style={isLinked ? lockedInputStyle : inputStyle}
+              readOnly={isLinked}
+            />
+          </Field>
           <Field label="Scientific name">
-            <input value={scientific} onChange={(e) => setScientific(e.target.value)} style={inputStyle} />
+            <input
+              value={scientific} onChange={(e) => setScientific(e.target.value)}
+              style={isLinked ? lockedInputStyle : inputStyle}
+              readOnly={isLinked}
+            />
           </Field>
           <Field label="Category">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SIGHTING_CATEGORIES.map(c => (
-                <button key={c} onClick={() => setCategory(c)} style={{
-                  padding: '8px 12px',
-                  background: category === c ? DS.ink : 'transparent',
-                  color: category === c ? DS.ivory : DS.ink,
-                  border: `0.5px solid ${category === c ? DS.ink : DS.inkFaint}`,
-                  cursor: 'pointer',
-                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                }}>{c}</button>
+                <button
+                  key={c}
+                  onClick={() => !isLinked && setCategory(c)}
+                  disabled={isLinked}
+                  style={{
+                    padding: '8px 12px',
+                    background: category === c ? DS.ink : 'transparent',
+                    color: category === c ? DS.ivory : DS.ink,
+                    border: `0.5px solid ${category === c ? DS.ink : DS.inkFaint}`,
+                    cursor: isLinked ? 'not-allowed' : 'pointer',
+                    fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.15em',
+                    textTransform: 'uppercase',
+                    opacity: isLinked && category !== c ? 0.4 : 1,
+                  }}
+                >{c}</button>
               ))}
             </div>
           </Field>
