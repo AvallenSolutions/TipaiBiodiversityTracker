@@ -95,5 +95,23 @@ export function useSpecies() {
     return data as Species
   }, [])
 
-  return { species, loading, fromCache, fetchSpecies, createSpecies }
+  const updateSpecies = useCallback(async (
+    id: string,
+    updates: Partial<Species>,
+  ): Promise<Species> => {
+    const { data, error } = await (supabase.from('species') as any)
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error) throw error
+    return data as Species
+  }, [])
+
+  const deleteSpecies = useCallback(async (id: string): Promise<void> => {
+    const { error } = await (supabase.from('species') as any).delete().eq('id', id)
+    if (error) throw error
+  }, [])
+
+  return { species, loading, fromCache, fetchSpecies, createSpecies, updateSpecies, deleteSpecies }
 }

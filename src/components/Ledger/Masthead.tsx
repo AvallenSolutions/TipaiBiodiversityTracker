@@ -45,14 +45,18 @@ export function Masthead({
       ? <>Today's <em style={{ fontStyle: 'italic', fontWeight: 300 }}>gatherings</em>.</>
       : view === 'sighting' && selectedSighting
       ? <>Sighting <em style={{ fontStyle: 'italic', fontWeight: 300 }}>№ {selectedSighting.id.slice(0, 4).toUpperCase()}</em>.</>
+      : view === 'sighting'
+      ? <>Recent <em style={{ fontStyle: 'italic', fontWeight: 300 }}>entries</em>.</>
       : view === 'species' && selectedSpecies
       ? <><em style={{ fontStyle: 'italic', fontWeight: 300 }}>{selectedSpecies}</em>.</>
-      : <><em style={{ fontStyle: 'italic', fontWeight: 300 }}>Select</em> a record.</>
+      : <>The <em style={{ fontStyle: 'italic', fontWeight: 300 }}>library</em>.</>
 
   const subhead =
     view === 'desk' ? '◆ The Head Naturalist\'s Desk'
-    : view === 'sighting' ? '◆ A record under review'
-    : '◆ Species folio'
+    : view === 'sighting' && selectedSighting ? '◆ A record under review'
+    : view === 'sighting' ? '◆ Sightings · in review'
+    : view === 'species' && selectedSpecies ? '◆ Species folio'
+    : '◆ The library · admin'
 
   return (
     <div style={{
