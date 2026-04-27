@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DS } from '../../lib/ledger-design'
 import { useSpecies } from '../../hooks/useSpecies'
+import { useAuth } from '../../context/AuthContext'
+import { hasSpeciesDraft } from '../../lib/speciesDraft'
 import type { Species, SightingCategory } from '../../types'
 import { Mono, CatDot } from './shared'
 import { MonoIcon } from '../logger/shared'
@@ -11,13 +13,25 @@ const CATEGORY_OPTIONS: ('all' | SightingCategory)[] = [
 ]
 
 export function SpeciesLibraryView() {
+  const { user } = useAuth()
   const { species, loading, fetchSpecies, deleteSpecies } = useSpecies()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<'all' | SightingCategory>('all')
-  const [editing, setEditing] = useState<Species | 'new' | null>(null)
+  // Auto-resume an in-progress new-species draft so navigating away and
+  // coming back picks up where the naturalist left off.
+  const [editing, setEditing] = useState<Species | 'new' | null>(
+    () => (hasSpeciesDraft(user?.id) ? 'new' : null),
+  )
   const [deleteTarget, setDeleteTarget] = useState<Species | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // If the user landed on this page before auth resolved, reopen the
+  // draft as soon as the user id arrives.
+  useEffect(() => {
+    if (editing) return
+    if (hasSpeciesDraft(user?.id)) setEditing('new')
+  }, [user?.id, editing])
 
   // Initial + on-mount fetch. The editor sheet calls back into refresh()
   // after save/delete so changes appear immediately.
@@ -79,7 +93,9 @@ export function SpeciesLibraryView() {
             fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
             textTransform: 'uppercase', fontWeight: 500,
           }}
-        >+ Add new species</button>
+        >
+          {hasSpeciesDraft(user?.id) ? 'Resume draft →' : '+ Add new species'}
+        </button>
       </div>
 
       {/* Filters */}
