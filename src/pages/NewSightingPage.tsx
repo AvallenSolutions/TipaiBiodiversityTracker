@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuth } from '@/context/AuthContext'
 import { useGeolocation, formatCoordinates } from '@/hooks/useGeolocation'
+import { isStandalone } from '@/hooks/useInstallPrompt'
 import { useSpecies } from '@/hooks/useSpecies'
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
@@ -29,7 +30,7 @@ const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian'
 export default function NewSightingPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { location, getLocation, error: locationError, loading: locationLoading } = useGeolocation()
+  const { location, getLocation, error: locationError, loading: locationLoading, deniedPermanent: locationDenied } = useGeolocation()
   const [skipLocation, setSkipLocation] = useState(false)
 
   // Reactive online state so banners update if the user toggles flight mode
@@ -88,14 +89,18 @@ export default function NewSightingPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
-  // Chrome iOS (WKWebView) can't reliably open the camera via any API — we show
-  // an overlay directing those users to Safari. Safari iOS fully supports
-  // getUserMedia in PWA standalone mode with a one-time permission dialog.
+  // Chrome iOS (WKWebView) can't reliably open the camera via any API.
+  // Safari iOS in a *browser tab* asks for getUserMedia permission on every
+  // page load (the grant doesn't persist), which is awful for naturalists
+  // logging back-to-back sightings — so on non-standalone iOS we use the
+  // native <input type="file" capture> picker instead. The system camera
+  // has its own (persistent) permission flow at the OS level, and the user
+  // gets the familiar "Take Photo / Photo Library / Choose File" sheet.
+  // Inside an installed PWA (standalone display mode) Safari does remember
+  // getUserMedia permission, so we keep the live viewfinder there.
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const isChromeIOS = isIOS && /CriOS/.test(navigator.userAgent)
-  // Only Chrome iOS falls back to file input (library only — camera is broken).
-  // Safari iOS and all other platforms use getUserMedia for the live viewfinder.
-  const useNativeCapture = isChromeIOS
+  const useNativeCapture = isChromeIOS || (isIOS && !isStandalone())
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -211,25 +216,30 @@ export default function NewSightingPage() {
   // Trigger geolocation as soon as the user enters the log flow so the
   // permission dialog and GPS lookup run in parallel with the photo
   // capture and AI identification, instead of starting only when the
-  // user lands on the entry view (where they may submit before the
-  // fix resolves and end up persisting 0,0).
+  // user lands on the entry view (where they may submit before the fix
+  // resolves and end up persisting 0,0). If the user has permanently
+  // denied permission we don't retry — the hook ignores the call anyway,
+  // but skipping here keeps console + CPU clean.
   useEffect(() => {
+    if (locationDenied) return
     if (step === 'camera' || step === 'identifying' || step === 'entry') {
       if (!location) getLocation()
     }
-  }, [step, location, getLocation])
+  }, [step, location, getLocation, locationDenied])
 
   async function handleSubmit() {
     if (!category || !user) return
-    // GPS is required online; offline we let the naturalist explicitly
-    // skip if the receiver can't lock (indoors, cold-start failure, etc.).
+    // GPS is preferred but never blocking — naturalists can save without
+    // a fix (denied permission, indoors, cold-start failure, etc.). The
+    // "Save without location" button below makes the choice explicit; this
+    // guard just nudges the user to acknowledge it.
     if (!location && !skipLocation) {
       setSubmitError(
-        navigator.onLine
-          ? 'Waiting for GPS — please allow location access and try again.'
-          : 'Waiting for GPS. If you can\'t get a fix, tap "Save without location" below; you can add it on sync.'
+        locationDenied
+          ? 'Location access is blocked. Tap "Save without location" below to log without GPS.'
+          : 'Still waiting for GPS — tap "Save without location" if you can\'t get a fix.'
       )
-      getLocation()
+      if (!locationDenied) getLocation()
       return
     }
     setSubmitting(true)
@@ -336,10 +346,12 @@ export default function NewSightingPage() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
-        {/* Viewfinder — always a live video; Chrome iOS shows overlay on top */}
+        {/* Viewfinder — live video unless we're using the native iOS picker */}
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <video ref={videoRef} autoPlay playsInline muted
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {!useNativeCapture && (
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          )}
 
           {/* HUD */}
           <div style={{
@@ -356,8 +368,34 @@ export default function NewSightingPage() {
             </Mono>
           </div>
 
+          {/* iOS Safari (non-PWA): native picker prompt. Explains why there's
+              no live viewfinder and what tapping the shutter does. */}
+          {useNativeCapture && !isChromeIOS && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+              padding: '32px 24px', gap: 16,
+            }}>
+              <Mono size={9} color={DS.ochre} letter={0.22}>◆ Capture</Mono>
+              <div style={{
+                fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+                lineHeight: 1.25, color: DS.ivory, textAlign: 'center',
+                letterSpacing: '-0.01em', maxWidth: 320,
+              }}>
+                Tap the shutter to take a <em style={{ color: 'rgba(232,226,211,0.7)' }}>photo</em>.
+              </div>
+              <div style={{
+                fontFamily: DS.serif, fontSize: 13, fontWeight: 300, fontStyle: 'italic',
+                color: 'rgba(232,226,211,0.55)', textAlign: 'center',
+                lineHeight: 1.55, maxWidth: 280,
+              }}>
+                The iOS camera will open. You can also choose from your photo library.
+              </div>
+            </div>
+          )}
+
           {/* getUserMedia error */}
-          {cameraError && !isChromeIOS && (
+          {cameraError && !useNativeCapture && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex',
               alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
@@ -439,19 +477,21 @@ export default function NewSightingPage() {
           padding: '16px 0 20px', background: '#000',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         }}>
-          {isChromeIOS ? (
-            /* Chrome iOS can't take photos — shutter opens Photo Library only */
+          {useNativeCapture ? (
+            /* iOS Safari / Chrome iOS — shutter opens the system camera/library
+               picker. capture="environment" hints the rear camera, but iOS still
+               offers Photo Library as a choice. */
             <>
               <label htmlFor="native-camera-input" style={{
                 width: 76, height: 76, borderRadius: 38,
-                border: `1.5px solid rgba(255,255,255,0.4)`,
+                border: `1.5px solid ${DS.ivory}`,
                 background: 'none', cursor: 'pointer',
                 position: 'relative', display: 'block',
               }}>
-                <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.4)' }} />
+                <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
               </label>
-              <Mono size={9} color="rgba(255,255,255,0.3)" letter={0.22} style={{ textAlign: 'center' }}>
-                Choose from library
+              <Mono size={9} color="rgba(255,255,255,0.4)" letter={0.22} style={{ textAlign: 'center' }}>
+                {isChromeIOS ? 'Choose from library' : 'Camera · or library'}
               </Mono>
             </>
           ) : (
@@ -467,8 +507,16 @@ export default function NewSightingPage() {
           )}
         </div>
 
-        <input id="native-camera-input" type="file" accept="image/*"
-          onChange={handleFileSelect} style={{ display: 'none' }} />
+        <input
+          id="native-camera-input"
+          type="file"
+          accept="image/*"
+          // Chrome iOS' camera doesn't work via this API, so we omit capture
+          // there and let the user pick from the library only.
+          {...(!isChromeIOS ? { capture: 'environment' as const } : {})}
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
     )
@@ -899,14 +947,17 @@ export default function NewSightingPage() {
               Offline · the entry will be held on the device and synced on signal
             </Mono>
           )}
+          {/* Submit. The button is only disabled while we're actively
+              submitting — GPS is never required, so "Save without location"
+              and "Seal the entry" are both reachable. */}
           <button
             onClick={handleSubmit}
-            disabled={submitting || (!location && !skipLocation)}
+            disabled={submitting}
             style={{
               width: '100%', padding: '18px 20px',
-              background: (!location && !skipLocation) ? DS.inkFaint : DS.ochre, color: DS.ink,
+              background: DS.ochre, color: DS.ink,
               border: 'none',
-              cursor: submitting || (!location && !skipLocation) ? 'not-allowed' : 'pointer',
+              cursor: submitting ? 'not-allowed' : 'pointer',
               fontFamily: DS.mono, fontSize: 12, letterSpacing: '0.3em',
               textTransform: 'uppercase', fontWeight: 500,
               opacity: submitting ? 0.5 : 1,
@@ -915,7 +966,7 @@ export default function NewSightingPage() {
             {submitting
               ? 'Sealing…'
               : !location && !skipLocation
-                ? (locationLoading ? 'Acquiring GPS…' : 'Waiting for GPS…')
+                ? (locationLoading ? 'Acquiring GPS…' : isOnline ? 'Seal the entry ⎘' : 'Save offline ⎘')
                 : skipLocation && !location
                   ? 'Save without location ⎘'
                   : isOnline
@@ -924,7 +975,9 @@ export default function NewSightingPage() {
                       ? 'Save offline ⎘'
                       : 'Save · finalize on signal ⎘'}
           </button>
-          {!location && !isOnline && (
+          {/* Always offer the GPS bypass when we don't have a fix — denied
+              permission, timeout, indoors, etc. — regardless of online state. */}
+          {!location && (
             <button
               onClick={() => setSkipLocation(true)}
               disabled={skipLocation}
