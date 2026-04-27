@@ -5,12 +5,17 @@ export function useGeolocation() {
   const [location, setLocation] = useState<LocationData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Permission denied is permanent for the session — once it's set we stop
+  // calling getCurrentPosition so we don't generate console noise (and on
+  // iOS Safari, won't repeatedly trigger the system "denied" path).
+  const [deniedPermanent, setDeniedPermanent] = useState(false)
 
   const getLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser')
       return
     }
+    if (deniedPermanent) return
 
     setLoading(true)
     setError(null)
@@ -25,7 +30,23 @@ export function useGeolocation() {
         setLoading(false)
       },
       (err) => {
-        setError(`Location error: ${err.message}`)
+        // PERMISSION_DENIED (1) sticks for the session — likely set in
+        // browser/site settings rather than a one-off dismissal. Surface a
+        // friendlier message and stop retrying.
+        if (err.code === err.PERMISSION_DENIED) {
+          setDeniedPermanent(true)
+          setError(
+            'Location access is blocked for this site. ' +
+            'You can save the sighting without GPS, or enable Location ' +
+            'Services in your browser settings to attach coordinates.'
+          )
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setError('GPS unavailable — your device couldn\'t get a fix.')
+        } else if (err.code === err.TIMEOUT) {
+          setError('GPS timed out — try again, or save without location.')
+        } else {
+          setError(`Location error: ${err.message}`)
+        }
         setLoading(false)
       },
       // 60s timeout because cold-start GPS without A-GPS (i.e. offline)
@@ -34,9 +55,9 @@ export function useGeolocation() {
       // the receiver re-locks for a fresh reading.
       { enableHighAccuracy: true, timeout: 60000, maximumAge: 60000 }
     )
-  }, [])
+  }, [deniedPermanent])
 
-  return { location, loading, error, getLocation }
+  return { location, loading, error, deniedPermanent, getLocation }
 }
 
 export function formatCoordinates(lat: number | null, lng: number | null): string {
