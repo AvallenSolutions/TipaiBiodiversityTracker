@@ -4,6 +4,10 @@ import { DS } from '../../lib/ledger-design'
 import { supabase } from '../../lib/supabase'
 import { uploadSpeciesImage } from '../../lib/storage'
 import { useAuth } from '../../context/AuthContext'
+import {
+  loadSpeciesDraft, saveSpeciesDraft, clearSpeciesDraft,
+  type NativeFlag,
+} from '../../lib/speciesDraft'
 import type { Species, SightingCategory } from '../../types'
 import { Mono } from './shared'
 import { MonoIcon } from '../logger/shared'
@@ -11,8 +15,6 @@ import { MonoIcon } from '../logger/shared'
 const CATEGORIES: SightingCategory[] = [
   'mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace',
 ]
-
-type NativeFlag = 'unknown' | 'native' | 'non_native'
 
 function flagFromBool(v: boolean | null | undefined): NativeFlag {
   if (v === true) return 'native'
@@ -35,18 +37,37 @@ export function SpeciesEditorSheet({
   const { user } = useAuth()
   const isNew = species === null
 
-  const [common, setCommon] = useState(species?.common_name ?? '')
-  const [scientific, setScientific] = useState(species?.scientific_name ?? '')
-  const [category, setCategory] = useState<SightingCategory>(species?.category ?? 'mammal')
-  const [subcategory, setSubcategory] = useState(species?.subcategory ?? '')
-  const [family, setFamily] = useState(species?.family ?? '')
-  const [description, setDescription] = useState(species?.description ?? '')
-  const [habitat, setHabitat] = useState(species?.habitat ?? '')
-  const [nativeFlag, setNativeFlag] = useState<NativeFlag>(flagFromBool(species?.is_native))
-  const [isNotable, setIsNotable] = useState<boolean>(!!species?.is_notable)
+  // For new species we hydrate from a saved draft (if any) so a naturalist
+  // can pop out to look something up — open Wikipedia, browse the Photos
+  // app — without losing what they've typed. Editing an existing record
+  // doesn't use the draft store: those edits are scoped to the species
+  // and saving / cancelling against a moving target is more confusing
+  // than helpful.
+  const initialDraft = isNew ? loadSpeciesDraft(user?.id) : null
+  const [draftRestored, setDraftRestored] = useState(initialDraft !== null)
 
-  const [coverUrl, setCoverUrl] = useState<string | null>(species?.reference_image_url ?? null)
-  const [galleryUrls, setGalleryUrls] = useState<string[]>(species?.gallery_image_urls ?? [])
+  const [common, setCommon] = useState(initialDraft?.common ?? species?.common_name ?? '')
+  const [scientific, setScientific] = useState(initialDraft?.scientific ?? species?.scientific_name ?? '')
+  const [category, setCategory] = useState<SightingCategory>(
+    initialDraft?.category ?? species?.category ?? 'mammal',
+  )
+  const [subcategory, setSubcategory] = useState(initialDraft?.subcategory ?? species?.subcategory ?? '')
+  const [family, setFamily] = useState(initialDraft?.family ?? species?.family ?? '')
+  const [description, setDescription] = useState(initialDraft?.description ?? species?.description ?? '')
+  const [habitat, setHabitat] = useState(initialDraft?.habitat ?? species?.habitat ?? '')
+  const [nativeFlag, setNativeFlag] = useState<NativeFlag>(
+    initialDraft?.nativeFlag ?? flagFromBool(species?.is_native),
+  )
+  const [isNotable, setIsNotable] = useState<boolean>(
+    initialDraft?.isNotable ?? !!species?.is_notable,
+  )
+
+  const [coverUrl, setCoverUrl] = useState<string | null>(
+    initialDraft?.coverUrl ?? species?.reference_image_url ?? null,
+  )
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(
+    initialDraft?.galleryUrls ?? species?.gallery_image_urls ?? [],
+  )
 
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -69,9 +90,43 @@ export function SpeciesEditorSheet({
   }, [onClose])
 
   // For new species we don't have an id until first save, but uploads need
-  // *some* path segment for storage. Generate a stable temp id so the user
-  // can stage a cover and gallery photos before the row is inserted.
-  const targetIdRef = useRef<string>(species?.id ?? uuidv4())
+  // *some* path segment for storage. Reuse the temp id from the saved draft
+  // when one exists so already-uploaded images stay reachable; otherwise
+  // mint a fresh one. For edits, use the species' real id.
+  const targetIdRef = useRef<string>(
+    species?.id ?? initialDraft?.targetId ?? uuidv4(),
+  )
+
+  // Auto-save the draft (new species only) on every change. Ignored when
+  // saving/closing for real — those paths clear the draft explicitly.
+  useEffect(() => {
+    if (!isNew || !user?.id) return
+    saveSpeciesDraft(user.id, {
+      targetId: targetIdRef.current,
+      common,
+      scientific,
+      category,
+      subcategory,
+      family,
+      description,
+      habitat,
+      nativeFlag,
+      isNotable,
+      coverUrl,
+      galleryUrls,
+      updatedAt: Date.now(),
+    })
+  }, [
+    isNew, user?.id,
+    common, scientific, category, subcategory, family,
+    description, habitat, nativeFlag, isNotable,
+    coverUrl, galleryUrls,
+  ])
+
+  function discardDraft() {
+    if (isNew) clearSpeciesDraft(user?.id)
+    onClose()
+  }
 
   async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -155,6 +210,7 @@ export function SpeciesEditorSheet({
           .select('*')
           .single()
         if (insertError) throw insertError
+        clearSpeciesDraft(user?.id)
         onSaved(data as Species)
       } else {
         const { data, error: updateError } = await (supabase.from('species') as any)
@@ -215,13 +271,52 @@ export function SpeciesEditorSheet({
               {common.trim() || (isNew ? 'New library entry' : species?.common_name)}
             </h2>
           </div>
-          <button onClick={onClose} style={{
-            background: 'transparent', border: `0.5px solid ${DS.inkHair}`,
-            padding: '8px 14px', cursor: 'pointer',
-            fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
-            color: DS.inkSoft, textTransform: 'uppercase',
-          }}>Close</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isNew && (
+              <button
+                onClick={discardDraft}
+                title="Throw away the saved draft and close"
+                style={{
+                  background: 'transparent', border: `0.5px solid ${DS.rust}`,
+                  padding: '8px 14px', cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+                  color: DS.rust, textTransform: 'uppercase',
+                }}
+              >× Discard draft</button>
+            )}
+            <button
+              onClick={onClose}
+              title={isNew ? 'Close (your draft is kept on this device)' : 'Close'}
+              style={{
+                background: 'transparent', border: `0.5px solid ${DS.inkHair}`,
+                padding: '8px 14px', cursor: 'pointer',
+                fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+                color: DS.inkSoft, textTransform: 'uppercase',
+              }}
+            >Close</button>
+          </div>
         </div>
+
+        {/* Restored-draft banner */}
+        {isNew && draftRestored && (
+          <div style={{
+            padding: '10px 24px', background: 'rgba(184,147,90,0.12)',
+            borderBottom: `0.5px solid ${DS.inkHair}`,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          }}>
+            <Mono size={9} color={DS.ochre} letter={0.18}>
+              ◆ Draft restored — you can close this and come back later
+            </Mono>
+            <button
+              onClick={() => setDraftRestored(false)}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+                color: DS.inkSoft, textTransform: 'uppercase',
+              }}
+            >Dismiss</button>
+          </div>
+        )}
 
         <div style={{ overflow: 'auto', padding: '20px 24px' }}>
           {error && (
@@ -493,7 +588,9 @@ export function SpeciesEditorSheet({
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
         }}>
           <Mono size={8} letter={0.2} color={DS.inkFaint}>
-            Library entries are visible to everyone with access to the app.
+            {isNew
+              ? 'Drafts are kept on this device — close any time, come back later.'
+              : 'Library entries are visible to everyone with access to the app.'}
           </Mono>
           <button
             onClick={handleSubmit}
