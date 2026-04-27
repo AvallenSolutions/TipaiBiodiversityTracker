@@ -9,7 +9,9 @@ import { Masthead } from '@/components/Ledger/Masthead'
 import { Mono } from '@/components/Ledger/shared'
 import { Desk } from '@/components/Ledger/Desk'
 import { SightingDetailView } from '@/components/Ledger/SightingDetailView'
+import { SightingsListView } from '@/components/Ledger/SightingsListView'
 import { SpeciesDetailView } from '@/components/Ledger/SpeciesDetailView'
+import { SpeciesLibraryView } from '@/components/Ledger/SpeciesLibraryView'
 import type { Sighting } from '@/types'
 
 function deriveInitials(name?: string | null, email?: string | null): string {
@@ -126,41 +128,35 @@ export default function DashboardPage() {
       {view === 'sighting' && selectedSighting && (
         <SightingDetailView
           sighting={selectedSighting}
-          onBack={() => setView('desk')}
+          onBack={() => { setSelectedSighting(null) }}
           onOpenSpecies={() => openSpecies(
             selectedSighting.common_name
             || selectedSighting.scientific_name
             || `Unknown ${selectedSighting.category}`
           )}
-          onChanged={() => { fetchSightings(); setView('desk') }}
+          onChanged={() => { fetchSightings(); setSelectedSighting(null) }}
         />
       )}
 
       {view === 'sighting' && !selectedSighting && (
-        <div style={{
-          padding: '60px 40px', fontFamily: DS.serif, fontSize: 22,
-          fontStyle: 'italic', color: DS.inkSoft,
-        }}>
-          Select an entry from the Front Desk to view its full record.
-        </div>
+        <SightingsListView
+          sightings={sightings}
+          onOpenSighting={openSighting}
+          onChanged={fetchSightings}
+        />
       )}
 
       {view === 'species' && selectedSpecies && (
         <SpeciesDetailView
           speciesName={selectedSpecies}
           sightings={sightings}
-          onBack={() => setView('desk')}
+          onBack={() => setSelectedSpecies(null)}
           onOpenSighting={openSighting}
         />
       )}
 
       {view === 'species' && !selectedSpecies && (
-        <div style={{
-          padding: '60px 40px', fontFamily: DS.serif, fontSize: 22,
-          fontStyle: 'italic', color: DS.inkSoft,
-        }}>
-          Open the Library on the Front Desk to pick a species folio.
-        </div>
+        <SpeciesLibraryView />
       )}
     </div>
   )
