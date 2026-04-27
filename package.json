@@ -10,10 +10,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
-    "@types/leaflet": "^1.9.21",
     "date-fns": "^4.1.0",
     "idb": "^8.0.2",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

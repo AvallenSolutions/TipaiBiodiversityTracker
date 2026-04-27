@@ -3,8 +3,7 @@ import { formatDistanceToNow, format, subMonths, startOfMonth } from 'date-fns'
 import { DS, normalizeConf, getFlag, catLetter } from '../../lib/ledger-design'
 import { getMediaUrl } from '../../lib/storage'
 import type { Sighting } from '../../types'
-import { Mono, StatBlock, CatDot, ConfPill, FlagTag, Sparkline } from './shared'
-import { ReserveMap } from './ReserveMap'
+import { Mono, PhotoPlaceholder, StatBlock, CatDot, ConfPill, FlagTag, Sparkline } from './shared'
 
 export interface SpeciesEntry {
   common: string
@@ -246,6 +245,64 @@ function SpeciesLibrary({
   )
 }
 
+// ─── Reserve Map ─────────────────────────────────────────────────────────────
+
+function ReserveMap({ sightings }: { sightings: Sighting[] }) {
+  // Only sightings with a real GPS fix have a place on the map; offline
+  // entries that haven't been backfilled yet are omitted (they appear in
+  // the Review Queue instead so a naturalist can add coordinates).
+  const located = sightings.filter(
+    (s): s is Sighting & { latitude: number; longitude: number } =>
+      s.latitude != null && s.longitude != null
+  )
+  if (!located.length) return null
+  const lats = located.map(s => s.latitude)
+  const lngs = located.map(s => s.longitude)
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats)
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
+  const padLat = (maxLat - minLat) * 0.1 || 0.01
+  const padLng = (maxLng - minLng) * 0.1 || 0.01
+
+  return (
+    <div>
+      <Mono size={9} color={DS.ochre}>◆ §03 · RESERVE MAP</Mono>
+      <div style={{ fontFamily: DS.serif, fontSize: 22, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 4, marginBottom: 14 }}>
+        Spatial distribution
+      </div>
+      <div style={{
+        background: DS.ivory, border: `0.5px solid ${DS.ink}`,
+        height: 260, position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: `linear-gradient(${DS.inkHair} 1px, transparent 1px), linear-gradient(90deg, ${DS.inkHair} 1px, transparent 1px)`,
+          backgroundSize: '40px 40px',
+        }} />
+        {located.map(s => {
+          const x = ((s.longitude - minLng + padLng) / (maxLng - minLng + padLng * 2)) * 100
+          const y = 100 - ((s.latitude - minLat + padLat) / (maxLat - minLat + padLat * 2)) * 100
+          const catColors: Record<string, string> = {
+            mammal: DS.ochre, bird: '#4A7FA5', reptile: DS.forest,
+            amphibian: '#5E8A8A', insect: DS.rust, plant: DS.forest,
+            fungi: '#7B5E8A', trace: DS.inkSoft,
+          }
+          return (
+            <div key={s.id} title={s.common_name ?? s.category} style={{
+              position: 'absolute',
+              left: `${x}%`, top: `${y}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 8, height: 8, borderRadius: 4,
+              background: catColors[s.category] ?? DS.ochre,
+              border: `1px solid ${DS.paper}`,
+              opacity: 0.8,
+            }} />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Desk ────────────────────────────────────────────────────────────────────
 
 export function Desk({
@@ -323,7 +380,7 @@ export function Desk({
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 40 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
           <ReviewQueue sightings={sightings} onOpenSighting={onOpenSighting} />
-          <ReserveMap sightings={sightings} onOpenSighting={onOpenSighting} />
+          <ReserveMap sightings={sightings} />
         </div>
         <SpeciesLibrary library={library} onOpenSpecies={onOpenSpecies} />
       </div>
