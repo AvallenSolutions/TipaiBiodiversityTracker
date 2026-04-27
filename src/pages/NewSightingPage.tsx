@@ -80,6 +80,7 @@ export default function NewSightingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [sealedOffline, setSealedOffline] = useState(false)
+  const [sealedNeedsFinalization, setSealedNeedsFinalization] = useState(false)
 
   // Camera
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -168,6 +169,14 @@ export default function NewSightingPage() {
       const photo = capturedMedia[capturedMedia.length - 1]
       const timer = setTimeout(() => {
         setAiError(null)
+        // Offline: skip the identify telegram entirely and drop the user
+        // straight into the entry view. They can pick from the cached
+        // library or write the species by hand. The sighting is held on
+        // the device and finalized once signal returns.
+        if (!navigator.onLine) {
+          setStep('entry')
+          return
+        }
         if (photo?.type === 'photo' && isGeminiAvailable()) {
           setAiLoading(true)
           identifySpecies(photo.blob, category)
@@ -188,7 +197,6 @@ export default function NewSightingPage() {
             })
         } else {
           if (!isGeminiAvailable()) setAiError('VITE_GEMINI_API_KEY not found in env — is it set on Netlify and did you redeploy?')
-          else if (!navigator.onLine) setAiError('Offline — AI identification skipped.')
           setStep('identify')
         }
       }, 800)
@@ -271,6 +279,11 @@ export default function NewSightingPage() {
           if (mediaError) throw mediaError
         }
       } else {
+        // Sightings logged offline without a species pick are flagged for
+        // finalization — they are kept on-device until the user reconnects
+        // and confirms a species (either via AI on the stored photo or by
+        // picking from the library).
+        const hasSpeciesPicked = !!(linkedSpeciesId || selectedSpecies?.common_name)
         await savePendingSighting({
           id: sightingId,
           user_id: user.id,
@@ -292,12 +305,15 @@ export default function NewSightingPage() {
             mime_type: m.blob.type,
           })),
           created_at: now,
+          needs_finalization: !hasSpeciesPicked,
         })
       }
 
+      const needsFinalization = wasOffline && !(linkedSpeciesId || selectedSpecies?.common_name)
       setSealedOffline(wasOffline)
+      setSealedNeedsFinalization(needsFinalization)
       setStep('sealed')
-      setTimeout(() => navigate('/', { replace: true }), wasOffline ? 4000 : 2500)
+      setTimeout(() => navigate('/', { replace: true }), wasOffline ? 4500 : 2500)
     } catch (err: any) {
       setSubmitError(err.message || 'Failed to save sighting')
       setSubmitting(false)
@@ -640,12 +656,20 @@ export default function NewSightingPage() {
 
         {!isOnline && (
           <div style={{
-            background: DS.rust, padding: '10px 20px',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+            background: DS.rust, padding: '12px 20px',
+            display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
           }}>
             <Mono size={10} color={DS.ivory} letter={0.18}>
-              ● OFFLINE · entry will be held on the device and synced on signal
+              ● OFFLINE · AI identification skipped
             </Mono>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 13, fontWeight: 300, fontStyle: 'italic',
+              color: DS.ivory, lineHeight: 1.4,
+            }}>
+              Pick the species from the field guide below — or leave it blank
+              and we'll prompt you to identify it (with AI or by hand) when
+              you're back online.
+            </span>
           </div>
         )}
 
@@ -756,7 +780,9 @@ export default function NewSightingPage() {
                   ? 'Save without location ⎘'
                   : isOnline
                     ? 'Seal the entry ⎘'
-                    : 'Save offline ⎘'}
+                    : (linkedSpeciesId || selectedSpecies?.common_name)
+                      ? 'Save offline ⎘'
+                      : 'Save · finalize on signal ⎘'}
           </button>
           {!location && !isOnline && (
             <button
@@ -869,7 +895,11 @@ export default function NewSightingPage() {
 
         <div style={{ textAlign: 'center' }}>
           <Mono size={10} letter={0.25} color={DS.ochre} style={{ marginBottom: 12 }}>
-            {sealedOffline ? 'Held locally' : 'Entry sealed'}
+            {sealedNeedsFinalization
+              ? 'Held — needs finalization'
+              : sealedOffline
+                ? 'Held locally'
+                : 'Entry sealed'}
           </Mono>
           <h2 style={{
             fontFamily: DS.serif, fontSize: 32, fontWeight: 300,
@@ -877,19 +907,33 @@ export default function NewSightingPage() {
           }}>
             {selectedSpecies?.common_name || 'Unidentified'}<br />
             <em style={{ fontWeight: 300, color: DS.inkSoft }}>
-              {sealedOffline
-                ? 'is saved on the device.'
-                : 'has been entered into the logbook.'}
+              {sealedNeedsFinalization
+                ? 'is held on the device.'
+                : sealedOffline
+                  ? 'is saved on the device.'
+                  : 'has been entered into the logbook.'}
             </em>
           </h2>
           {sealedOffline && (
             <p style={{
-              marginTop: 18, maxWidth: 360,
+              marginTop: 18, maxWidth: 380,
               fontFamily: DS.serif, fontSize: 15, fontStyle: 'italic',
-              fontWeight: 300, color: DS.inkSoft, lineHeight: 1.5,
+              fontWeight: 300, color: DS.inkSoft, lineHeight: 1.55,
             }}>
-              Open the app on signal to sync this sighting to the logbook. The
-              upload happens automatically the moment you're back online.
+              {sealedNeedsFinalization ? (
+                <>
+                  Your sighting has been logged on this phone. Open the app
+                  when you have signal to finalize it — you'll be able to use
+                  AI on your photo or pick the species from the library
+                  before it joins the logbook.
+                </>
+              ) : (
+                <>
+                  Your sighting has been logged on this phone. Open the app
+                  when you have signal and it will sync to the logbook
+                  automatically.
+                </>
+              )}
             </p>
           )}
         </div>

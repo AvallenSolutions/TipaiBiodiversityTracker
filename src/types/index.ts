@@ -113,4 +113,9 @@ export interface PendingSighting {
   individual_count: number | null
   media: { blob: Blob; type: MediaType; mime_type: string }[]
   created_at: string
+  // True when the sighting was logged offline and the user has not yet
+  // confirmed a species (no library link, no AI suggestion accepted).
+  // Sightings flagged this way are NOT auto-synced — the user is asked
+  // to finalize them on /pending before they upload to the logbook.
+  needs_finalization?: boolean
 }
