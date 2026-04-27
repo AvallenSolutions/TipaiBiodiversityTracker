@@ -17,7 +17,7 @@ interface CapturedMedia {
   type: MediaType
 }
 
-type Step = 'camera' | 'identifying' | 'identify' | 'entry' | 'sealed'
+type Step = 'camera' | 'choose' | 'identifying' | 'identify' | 'entry' | 'sealed'
 
 const BEHAVIOURS = ['Resting', 'Feeding', 'Moving', 'Stalking', 'Alert', 'Calling', 'Grooming', 'Mating', 'With young']
 const HABITATS = ['Sal forest', 'Bamboo', 'Grassland', 'Riverine', 'Water body', 'Rocky outcrop', 'Cultivated', 'Scrub']
@@ -132,10 +132,14 @@ export default function NewSightingPage() {
     }
   }, [stopStream, useNativeCapture])
 
-  // Used by both the canvas capture (non-iOS) and native file input (iOS)
+  // Used by both the canvas capture (non-iOS) and native file input (iOS).
+  // After the photo lands, the user chooses how to identify the subject —
+  // AI on the photo, or pick from the library / by hand. We always route
+  // through the 'choose' step so the choice is explicit (and so manual
+  // identification works just as well online as it does offline).
   const commitBlob = useCallback((blob: Blob) => {
     setCapturedMedia(prev => [...prev, { blob, type: 'photo' }])
-    setStep('identifying')
+    setStep('choose')
   }, [])
 
   const handleCapture = () => {
@@ -466,6 +470,142 @@ export default function NewSightingPage() {
         <input id="native-camera-input" type="file" accept="image/*"
           onChange={handleFileSelect} style={{ display: 'none' }} />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
+      </div>
+    )
+  }
+
+  // ─── Step: Choose (AI vs Manual) ───────────────────────────────────
+
+  if (step === 'choose') {
+    const aiAvailable = isOnline && isGeminiAvailable()
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 100, background: DS.ivory,
+        display: 'flex', flexDirection: 'column',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}>
+        {/* Photo preview */}
+        <div style={{
+          flex: '0 0 auto', position: 'relative',
+          background: DS.bone,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minHeight: '40vh', maxHeight: '50vh', overflow: 'hidden',
+        }}>
+          {photoPreviewUrl ? (
+            <img src={photoPreviewUrl} alt="Captured sighting"
+                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <Mono size={10} color={DS.inkFaint} letter={0.22}>Photo preview</Mono>
+          )}
+          <button
+            onClick={() => { setCapturedMedia([]); setStep('camera') }}
+            style={{
+              position: 'absolute', top: 12, left: 12,
+              background: 'rgba(11,14,12,0.55)', color: DS.ivory, border: 'none',
+              padding: '8px 12px', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+            }}
+          >← Retake</button>
+          {!isOnline && (
+            <div style={{
+              position: 'absolute', top: 12, right: 12,
+              padding: '6px 10px', background: DS.rust,
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              textTransform: 'uppercase', color: DS.ivory,
+            }}>● Offline</div>
+          )}
+        </div>
+
+        {/* Choice card */}
+        <div style={{
+          flex: 1, padding: '22px 22px 32px',
+          display: 'flex', flexDirection: 'column', overflow: 'auto',
+        }}>
+          <Mono size={10} letter={0.22} color={DS.ochre}>◆ How to identify</Mono>
+          <h2 style={{
+            fontFamily: DS.serif, fontSize: 26, fontWeight: 300,
+            letterSpacing: '-0.02em', margin: '6px 0 18px', color: DS.ink,
+            lineHeight: 1.15,
+          }}>
+            Already <em style={{ fontWeight: 300 }}>know</em> what it is?
+          </h2>
+
+          {/* Manual */}
+          <button
+            onClick={() => { setPicker('species'); setStep('entry') }}
+            style={{
+              textAlign: 'left', padding: '16px 18px', marginBottom: 12,
+              background: DS.ochre, color: DS.ink, border: 'none',
+              cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}
+          >
+            <Mono size={9} letter={0.2} color="rgba(28,37,32,0.7)">Recommended for known species</Mono>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 20, fontWeight: 400,
+              color: DS.ink, letterSpacing: '-0.01em',
+            }}>
+              Pick from the library →
+            </span>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 13, fontStyle: 'italic',
+              fontWeight: 300, color: 'rgba(28,37,32,0.75)', lineHeight: 1.5,
+            }}>
+              You took a clear photo of a tiger? Pick it directly from the field guide. Faster than AI, and works offline.
+            </span>
+          </button>
+
+          {/* AI */}
+          <button
+            onClick={() => aiAvailable && setStep('identifying')}
+            disabled={!aiAvailable}
+            style={{
+              textAlign: 'left', padding: '16px 18px',
+              background: aiAvailable ? DS.ink : DS.bone,
+              color: aiAvailable ? DS.ivory : DS.inkSoft,
+              border: aiAvailable ? 'none' : `0.5px solid ${DS.inkFaint}`,
+              cursor: aiAvailable ? 'pointer' : 'not-allowed',
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}
+          >
+            <Mono size={9} letter={0.2} color={aiAvailable ? 'rgba(244,238,226,0.7)' : DS.inkFaint}>
+              {aiAvailable ? 'For tricky IDs' : !isOnline ? 'Offline · unavailable' : 'AI not configured'}
+            </Mono>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 20, fontWeight: 400,
+              letterSpacing: '-0.01em',
+              color: aiAvailable ? DS.ivory : DS.inkSoft,
+            }}>
+              Identify with AI →
+            </span>
+            <span style={{
+              fontFamily: DS.serif, fontSize: 13, fontStyle: 'italic',
+              fontWeight: 300, lineHeight: 1.5,
+              color: aiAvailable ? 'rgba(244,238,226,0.75)' : DS.inkFaint,
+            }}>
+              {aiAvailable
+                ? 'Run the model on the photo and pick from the top three candidates.'
+                : !isOnline
+                  ? 'Connect to use AI — or pick from the library now and we\'ll save the entry on the device.'
+                  : 'The AI key is missing on this build.'}
+            </span>
+          </button>
+
+          {/* Skip — for entries without an obvious species (fill in later) */}
+          <button
+            onClick={() => setStep('entry')}
+            style={{
+              marginTop: 16, padding: '12px 0',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.25em',
+              textTransform: 'uppercase', color: DS.inkSoft,
+              borderTop: `0.5px solid ${DS.inkHair}`,
+            }}
+          >
+            Skip — fill in the rest now
+          </button>
+        </div>
       </div>
     )
   }
