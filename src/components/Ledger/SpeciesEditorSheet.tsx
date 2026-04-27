@@ -83,11 +83,10 @@ export function SpeciesEditorSheet({
     return () => { document.body.style.overflow = prev }
   }, [])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  // We deliberately don't close on Escape or on backdrop click — accidental
+  // dismissals lose work even with the draft store, because the user may
+  // have scrolled deep into a sub-form and clicking outside an input shouldn't
+  // throw the modal away. The Close button in the header is the only way out.
 
   // For new species we don't have an id until first save, but uploads need
   // *some* path segment for storage. Reuse the temp id from the saved draft
@@ -236,7 +235,6 @@ export function SpeciesEditorSheet({
 
   return (
     <div
-      onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={isNew ? 'Add new species' : `Edit ${species?.common_name}`}
@@ -247,8 +245,9 @@ export function SpeciesEditorSheet({
         padding: 20,
       }}
     >
+      {/* Backdrop is non-interactive — we don't want a misdirected tap to
+          throw away minutes of work. Use the explicit Close button. */}
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
           background: DS.ivory, border: `1px solid ${DS.ink}`,
           width: '100%', maxWidth: 720, maxHeight: '92vh',
