@@ -1,14 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Profile, UserRole } from '@/types'
+import type { Profile } from '@/types'
 
 interface AuthState {
   user: User | null
   profile: Profile | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>
+  // signUp creates a guest-level account. The server-side trigger forces
+  // role='guest' on every new user; an admin promotes legitimate staff
+  // and naturalists from the Admin page after signup. Callers don't
+  // pass a role any more.
+  signUp: (email: string, password: string, displayName: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signInAsGuest: (email: string) => Promise<void>
   signOut: () => Promise<void>
@@ -64,13 +68,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signUp(email: string, password: string, displayName: string, role: UserRole) {
+  async function signUp(email: string, password: string, displayName: string) {
+    // We deliberately do NOT pass a role in user_metadata — the server
+    // trigger ignores it anyway (and forces 'guest') but sending it
+    // would imply the client controls the outcome. Promotion is admin-only.
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: { display_name: displayName, role },
+        data: { display_name: displayName },
       },
     })
     if (error) throw error
