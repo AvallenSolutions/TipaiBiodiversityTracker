@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { DS } from '../../lib/ledger-design'
 import { useSpecies } from '../../hooks/useSpecies'
 import { useAuth } from '../../context/AuthContext'
+import { useSpeciesEditor } from '../../context/SpeciesEditorContext'
 import { hasSpeciesDraft } from '../../lib/speciesDraft'
 import type { Species, SightingCategory } from '../../types'
 import { Mono, CatDot } from './shared'
 import { MonoIcon } from '../logger/shared'
-import { SpeciesEditorSheet } from './SpeciesEditorSheet'
 
 const CATEGORY_OPTIONS: ('all' | SightingCategory)[] = [
   'all', 'mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace',
@@ -15,27 +15,21 @@ const CATEGORY_OPTIONS: ('all' | SightingCategory)[] = [
 export function SpeciesLibraryView() {
   const { user } = useAuth()
   const { species, loading, fetchSpecies, deleteSpecies } = useSpecies()
+  const { open: openEditor, savedVersion } = useSpeciesEditor()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<'all' | SightingCategory>('all')
-  // Auto-resume an in-progress new-species draft so navigating away and
-  // coming back picks up where the naturalist left off.
-  const [editing, setEditing] = useState<Species | 'new' | null>(
-    () => (hasSpeciesDraft(user?.id) ? 'new' : null),
-  )
   const [deleteTarget, setDeleteTarget] = useState<Species | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // If the user landed on this page before auth resolved, reopen the
-  // draft as soon as the user id arrives.
-  useEffect(() => {
-    if (editing) return
-    if (hasSpeciesDraft(user?.id)) setEditing('new')
-  }, [user?.id, editing])
-
-  // Initial + on-mount fetch. The editor sheet calls back into refresh()
-  // after save/delete so changes appear immediately.
+  // Initial + on-mount fetch. We refetch when the editor saves (savedVersion
+  // bumps) so newly added or updated species appear immediately.
   useEffect(() => { fetchSpecies() }, [fetchSpecies])
+  useEffect(() => {
+    if (savedVersion === 0) return
+    fetchSpecies(undefined, search.trim() || undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedVersion])
 
   // Debounced search refetch (server-side ilike match).
   useEffect(() => {
@@ -86,7 +80,7 @@ export function SpeciesLibraryView() {
           </div>
         </div>
         <button
-          onClick={() => { setError(null); setEditing('new') }}
+          onClick={() => { setError(null); openEditor('new') }}
           style={{
             background: DS.ochre, color: DS.ink, border: 'none',
             padding: '14px 22px', cursor: 'pointer',
@@ -161,7 +155,7 @@ export function SpeciesLibraryView() {
           <SpeciesCard
             key={sp.id}
             species={sp}
-            onEdit={() => { setError(null); setEditing(sp) }}
+            onEdit={() => { setError(null); openEditor(sp) }}
             onDelete={() => { setError(null); setDeleteTarget(sp) }}
           />
         ))}
@@ -175,16 +169,9 @@ export function SpeciesLibraryView() {
         )}
       </div>
 
-      {editing && (
-        <SpeciesEditorSheet
-          species={editing === 'new' ? null : editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null)
-            fetchSpecies(undefined, search.trim() || undefined)
-          }}
-        />
-      )}
+      {/* The editor is mounted at the App level (SpeciesEditorProvider)
+          so it survives every in-app navigation. We just open it via
+          context here. */}
 
       {deleteTarget && (
         <DeleteConfirmSheet

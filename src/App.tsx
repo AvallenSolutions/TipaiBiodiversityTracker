@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { SpeciesEditorProvider } from '@/context/SpeciesEditorContext'
 import ProtectedRoute from '@/components/layout/ProtectedRoute'
 import AppShell from '@/components/layout/AppShell'
 import LoginPage from '@/pages/LoginPage'
@@ -16,34 +17,36 @@ export default function App() {
   const { user } = useAuth()
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route path="/signup" element={user ? <Navigate to="/" replace /> : <SignUpPage />} />
+    <SpeciesEditorProvider>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/signup" element={user ? <Navigate to="/" replace /> : <SignUpPage />} />
 
-      {/* Ledger dashboard — full page, no AppShell chrome */}
-      <Route path="dashboard" element={
-        <ProtectedRoute roles={['naturalist', 'admin']}>
-          <DashboardPage />
-        </ProtectedRoute>
-      } />
-
-      {/* Protected routes inside AppShell */}
-      <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
-        <Route index element={<HomePage />} />
-        <Route path="new" element={<NewSightingPage />} />
-        <Route path="pending" element={<PendingSightingsPage />} />
-        <Route path="sighting/:id" element={<SightingDetailPage />} />
-        <Route path="species" element={<SpeciesLibraryPage />} />
-        <Route path="admin" element={
-          <ProtectedRoute roles={['admin']}>
-            <AdminPage />
+        {/* Ledger dashboard — full page, no AppShell chrome */}
+        <Route path="dashboard" element={
+          <ProtectedRoute roles={['naturalist', 'admin']}>
+            <DashboardPage />
           </ProtectedRoute>
         } />
-      </Route>
 
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Protected routes inside AppShell */}
+        <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+          <Route index element={<HomePage />} />
+          <Route path="new" element={<NewSightingPage />} />
+          <Route path="pending" element={<PendingSightingsPage />} />
+          <Route path="sighting/:id" element={<SightingDetailPage />} />
+          <Route path="species" element={<SpeciesLibraryPage />} />
+          <Route path="admin" element={
+            <ProtectedRoute roles={['admin']}>
+              <AdminPage />
+            </ProtectedRoute>
+          } />
+        </Route>
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </SpeciesEditorProvider>
   )
 }
