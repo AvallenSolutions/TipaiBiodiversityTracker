@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
-import type { UserRole } from '@/types'
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -20,12 +19,15 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-export default function SignUpPage() {
+// Staff/naturalist self-signup. The form deliberately does NOT offer a
+// role selector: the database trigger forces every new user to start as
+// 'guest', and an admin promotes legitimate staff and naturalists from
+// the Admin page after signup. The wording here makes the wait visible.
+export default function StaffSignUpPage() {
   const { signUp } = useAuth()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<UserRole>('staff')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -35,7 +37,7 @@ export default function SignUpPage() {
     setError('')
     setLoading(true)
     try {
-      await signUp(email, password, displayName, role)
+      await signUp(email, password, displayName)
       setSuccess(true)
     } catch (err: any) {
       setError(err.message)
@@ -55,13 +57,13 @@ export default function SignUpPage() {
         justifyContent: 'center',
         padding: '24px 20px',
       }}>
-        <div style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 440, textAlign: 'center' }}>
           <div style={{
             borderTop: `3px double ${DS.ink}`,
             paddingTop: 16,
             marginBottom: 32,
           }}>
-            <Mono size={9} letter={0.22} color={DS.ochre}>◆ Account created</Mono>
+            <Mono size={9} letter={0.22} color={DS.ochre}>◆ Request received</Mono>
           </div>
           <h2 style={{
             fontFamily: DS.serif,
@@ -71,7 +73,7 @@ export default function SignUpPage() {
             color: DS.ink,
             margin: '0 0 16px',
           }}>
-            Welcome to the field.
+            Thanks — check your email.
           </h2>
           <p style={{
             fontFamily: DS.serif,
@@ -80,11 +82,25 @@ export default function SignUpPage() {
             fontWeight: 300,
             color: DS.inkSoft,
             lineHeight: 1.55,
+            margin: '0 0 16px',
+          }}>
+            We've sent a verification link to <strong style={{ fontWeight: 400, color: DS.ink, fontStyle: 'normal' }}>{email}</strong>.
+            Click it to confirm your address.
+          </p>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 14,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
+            lineHeight: 1.55,
             margin: '0 0 32px',
           }}>
-            Check your email to verify your account, then sign in to begin logging.
+            Your account starts as a <em>guest</em>. An admin will review your
+            request and upgrade you to staff or naturalist before you can
+            access the Ledger.
           </p>
-          <Link to="/login" style={{
+          <Link to="/staff/login" style={{
             display: 'inline-block',
             fontFamily: DS.serif,
             fontSize: 16,
@@ -112,39 +128,38 @@ export default function SignUpPage() {
       justifyContent: 'center',
       padding: '24px 20px',
     }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
 
-        {/* Masthead */}
         <div style={{
           borderTop: `3px double ${DS.ink}`,
           paddingTop: 16,
-          marginBottom: 40,
+          marginBottom: 32,
           textAlign: 'center',
         }}>
-          <Mono size={9} letter={0.22} color={DS.ochre}>◆ Wildlife Luxuries / Tipai</Mono>
+          <Mono size={9} letter={0.22} color={DS.ochre}>◆ Wildlife Luxuries / Staff request</Mono>
           <h1 style={{
             fontFamily: DS.serif,
-            fontSize: 36,
+            fontSize: 32,
             fontWeight: 300,
             letterSpacing: '-0.02em',
             margin: '8px 0 4px',
             color: DS.ink,
           }}>
-            Join the Journal
+            Request staff access
           </h1>
           <p style={{
             fontFamily: DS.serif,
-            fontSize: 15,
+            fontSize: 14,
             fontStyle: 'italic',
             fontWeight: 300,
             color: DS.inkSoft,
             margin: 0,
+            lineHeight: 1.5,
           }}>
-            Create your field account.
+            New accounts start as guest. An admin reviews and upgrades the role.
           </p>
         </div>
 
-        {/* Error */}
         {error && (
           <div style={{
             padding: '8px 12px',
@@ -184,7 +199,7 @@ export default function SignUpPage() {
             />
           </div>
 
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 32 }}>
             <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Password</Mono>
             <input
               type="password"
@@ -195,23 +210,6 @@ export default function SignUpPage() {
               minLength={6}
               style={inputStyle}
             />
-          </div>
-
-          <div style={{ marginBottom: 36 }}>
-            <Mono size={9} letter={0.22} color={DS.inkSoft} style={{ marginBottom: 6 }}>Role</Mono>
-            <select
-              value={role}
-              onChange={e => setRole(e.target.value as UserRole)}
-              style={{
-                ...inputStyle,
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <option value="staff">Staff</option>
-              <option value="naturalist">Naturalist</option>
-            </select>
           </div>
 
           <button
@@ -232,11 +230,10 @@ export default function SignUpPage() {
               transition: 'background 0.15s',
             }}
           >
-            {loading ? '⋯ Creating account' : 'Create Account →'}
+            {loading ? '⋯ Submitting' : 'Request access →'}
           </button>
         </form>
 
-        {/* Footer */}
         <div style={{
           marginTop: 36,
           paddingTop: 20,
@@ -249,11 +246,24 @@ export default function SignUpPage() {
             fontStyle: 'italic',
             fontWeight: 300,
             color: DS.inkSoft,
+            margin: '0 0 8px',
+          }}>
+            Already a staff member?{' '}
+            <Link to="/staff/login" style={{ color: DS.ink, textDecoration: 'underline' }}>
+              Sign in
+            </Link>
+          </p>
+          <p style={{
+            fontFamily: DS.serif,
+            fontSize: 13,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: DS.inkSoft,
             margin: 0,
           }}>
-            Already have an account?{' '}
+            Just visiting the reserve?{' '}
             <Link to="/login" style={{ color: DS.ink, textDecoration: 'underline' }}>
-              Sign in
+              Guest sign-in
             </Link>
           </p>
         </div>
