@@ -4,7 +4,8 @@ import { SpeciesEditorProvider } from '@/context/SpeciesEditorContext'
 import ProtectedRoute from '@/components/layout/ProtectedRoute'
 import AppShell from '@/components/layout/AppShell'
 import LoginPage from '@/pages/LoginPage'
-import SignUpPage from '@/pages/SignUpPage'
+import StaffLoginPage from '@/pages/StaffLoginPage'
+import StaffSignUpPage from '@/pages/StaffSignUpPage'
 import HomePage from '@/pages/HomePage'
 import NewSightingPage from '@/pages/NewSightingPage'
 import PendingSightingsPage from '@/pages/PendingSightingsPage'
@@ -21,7 +22,13 @@ export default function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/signup" element={user ? <Navigate to="/" replace /> : <SignUpPage />} />
+        <Route path="/staff/login" element={user ? <Navigate to="/" replace /> : <StaffLoginPage />} />
+        <Route path="/staff/signup" element={user ? <Navigate to="/" replace /> : <StaffSignUpPage />} />
+
+        {/* Legacy redirects — old links keep working but never surface
+            the role-picker form again. */}
+        <Route path="/signup" element={<Navigate to="/staff/signup" replace />} />
+        <Route path="/staff" element={<Navigate to="/staff/login" replace />} />
 
         {/* Ledger dashboard — full page, no AppShell chrome */}
         <Route path="dashboard" element={

@@ -117,12 +117,15 @@ export function SpeciesDetailView({
     ?? null
 
   return (
-    <div style={{ padding: '28px 40px 80px', background: DS.paper, minHeight: '100vh' }}>
+    <div style={{
+      padding: 'clamp(16px, 4vw, 28px) clamp(16px, 4vw, 40px) clamp(40px, 8vw, 80px)',
+      background: DS.paper, minHeight: '100vh',
+    }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 24, gap: 12, flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button onClick={onBack} style={backBtn}>← Back</button>
           <Mono size={9} color={DS.inkFaint}>
             / SPECIES / {display.category.toUpperCase()} / {display.common.toUpperCase()}
@@ -143,18 +146,30 @@ export function SpeciesDetailView({
         )}
       </div>
 
-      {/* Folio header */}
-      <div style={{ background: DS.ivory, border: `1px solid ${DS.ink}`, padding: '32px 36px', marginBottom: 32 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 40 }}>
-          <div>
+      {/* Folio header — auto-stacks below ~720px so the title doesn't get
+          squeezed into a column too narrow for serif words. */}
+      <div style={{
+        background: DS.ivory, border: `1px solid ${DS.ink}`,
+        padding: 'clamp(20px, 5vw, 36px)', marginBottom: 32,
+      }}>
+        <div style={{
+          display: 'grid', gap: 'clamp(20px, 4vw, 40px)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))',
+        }}>
+          <div style={{ minWidth: 0 }}>
             <Mono size={9} color={DS.ochre}>◆ FOLIO · {display.category.toUpperCase()}{display.family ? ` · ${display.family.toUpperCase()}` : ''}</Mono>
             <div style={{
-              fontFamily: DS.serif, fontSize: 64, fontWeight: 200, letterSpacing: '-0.04em',
-              lineHeight: 0.95, margin: '14px 0 8px', wordBreak: 'break-word',
+              fontFamily: DS.serif,
+              fontSize: 'clamp(34px, 8vw, 64px)',
+              fontWeight: 200, letterSpacing: '-0.04em',
+              lineHeight: 1.0, margin: '14px 0 8px',
+              overflowWrap: 'normal',
             }}>{display.common}</div>
             {display.scientific && (
               <div style={{
-                fontFamily: DS.serif, fontSize: 24, fontStyle: 'italic', fontWeight: 300,
+                fontFamily: DS.serif,
+                fontSize: 'clamp(16px, 3.6vw, 24px)',
+                fontStyle: 'italic', fontWeight: 300,
                 color: DS.inkSoft, marginBottom: 16,
               }}>{display.scientific}</div>
             )}
@@ -175,12 +190,14 @@ export function SpeciesDetailView({
 
             {display.description ? (
               <p style={{
-                fontFamily: DS.serif, fontSize: 17, fontWeight: 300, fontStyle: 'italic',
+                fontFamily: DS.serif,
+                fontSize: 'clamp(14px, 3vw, 17px)',
+                fontWeight: 300, fontStyle: 'italic',
                 color: DS.ink, lineHeight: 1.55, maxWidth: 580, margin: '0 0 12px',
               }}>{display.description}</p>
             ) : null}
             {display.habitat && (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <Mono size={8} letter={0.22} color={DS.inkSoft}>HABITAT</Mono>
                 <span style={{
                   fontFamily: DS.serif, fontSize: 15, fontWeight: 300, color: DS.ink,
@@ -188,7 +205,13 @@ export function SpeciesDetailView({
               </div>
             )}
           </div>
-          <div style={{ borderLeft: `0.5px solid ${DS.inkHair}`, paddingLeft: 30 }}>
+          <div style={{
+            // Border-left only when the columns are side-by-side. When
+            // stacked the inset becomes a top rule for visual continuity.
+            borderLeft: `0.5px solid ${DS.inkHair}`,
+            paddingLeft: 'clamp(0px, 2vw, 30px)',
+            minWidth: 0,
+          }}>
             <div style={{ height: 220, marginBottom: 16, background: DS.bone, overflow: 'hidden' }}>
               {heroPhoto ? (
                 <img src={heroPhoto} alt={display.common}
@@ -197,7 +220,11 @@ export function SpeciesDetailView({
                 <PhotoPlaceholder hue="ochre" height="100%" label="PLATE · ILLUSTRATIVE" />
               )}
             </div>
-            <div style={{ fontFamily: DS.serif, fontSize: 16, fontWeight: 300, color: DS.inkSoft, lineHeight: 1.5 }}>
+            <div style={{
+              fontFamily: DS.serif,
+              fontSize: 'clamp(14px, 3vw, 16px)',
+              fontWeight: 300, color: DS.inkSoft, lineHeight: 1.5,
+            }}>
               {stats.total === 0 ? (
                 <em>No sightings recorded yet.</em>
               ) : (
@@ -217,28 +244,33 @@ export function SpeciesDetailView({
         </div>
       </div>
 
-      {/* Stat strip */}
+      {/* Stat strip — wraps on narrow screens instead of squashing five
+          columns into a phone-width band. */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         background: DS.ivory, border: `1px solid ${DS.ink}`, marginBottom: 32,
       }}>
         <Stat label="Sightings" value={String(stats.total)} />
         <Stat label="Distinct days" value={String(stats.distinctDays)} />
         <Stat label="Individuals" value={stats.individuals > 0 ? String(stats.individuals) : '—'} />
         <Stat label="First seen" value={stats.firstSeen ? format(stats.firstSeen, 'd MMM yyyy') : '—'} />
-        <Stat label="Last seen" value={stats.lastSeen ? format(stats.lastSeen, 'd MMM yyyy') : '—'} last />
+        <Stat label="Last seen" value={stats.lastSeen ? format(stats.lastSeen, 'd MMM yyyy') : '—'} />
       </div>
 
       {/* 12-month trend */}
       <div style={{ marginBottom: 32 }}>
         <Mono size={9} color={DS.ochre}>◆ §01 · TWELVE MONTHS, IN FULL</Mono>
         <div style={{
-          fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+          fontFamily: DS.serif, fontSize: 'clamp(18px, 4vw, 22px)', fontWeight: 300,
           letterSpacing: '-0.02em', marginTop: 4, marginBottom: 14,
         }}>
           Monthly sightings
         </div>
-        <div style={{ background: DS.ivory, border: `0.5px solid ${DS.ink}`, padding: 22 }}>
+        <div style={{
+          background: DS.ivory, border: `0.5px solid ${DS.ink}`,
+          padding: 'clamp(14px, 3vw, 22px)',
+        }}>
           <TrendChart data={trend} height={160} />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
             {months.map((m, i) => <Mono key={i} size={8} letter={0.15} color={DS.inkFaint}>{m}</Mono>)}
@@ -250,7 +282,7 @@ export function SpeciesDetailView({
       <div style={{ marginBottom: 32 }}>
         <Mono size={9} color={DS.ochre}>◆ §02 · WHERE</Mono>
         <div style={{
-          fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+          fontFamily: DS.serif, fontSize: 'clamp(18px, 4vw, 22px)', fontWeight: 300,
           letterSpacing: '-0.02em', marginTop: 4, marginBottom: 14,
         }}>
           Sighting locations
@@ -272,7 +304,7 @@ export function SpeciesDetailView({
       <div>
         <Mono size={9} color={DS.ochre}>◆ §03 · SIGHTINGS HISTORY</Mono>
         <div style={{
-          fontFamily: DS.serif, fontSize: 22, fontWeight: 300,
+          fontFamily: DS.serif, fontSize: 'clamp(18px, 4vw, 22px)', fontWeight: 300,
           letterSpacing: '-0.02em', marginTop: 4, marginBottom: 14,
         }}>
           {matching.length} entr{matching.length === 1 ? 'y' : 'ies'}, most recent first
@@ -293,16 +325,16 @@ export function SpeciesDetailView({
                   onClick={() => onOpenSighting(s)}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '64px 1fr auto',
-                    gap: 16, alignItems: 'center', width: '100%', textAlign: 'left',
+                    gridTemplateColumns: '56px minmax(0, 1fr) auto',
+                    gap: 12, alignItems: 'center', width: '100%', textAlign: 'left',
                     background: 'transparent', border: 'none', cursor: 'pointer',
                     borderBottom: i < matching.length - 1 ? `0.5px solid ${DS.inkHair}` : 'none',
-                    padding: '12px 18px',
+                    padding: 'clamp(10px, 2.5vw, 14px) clamp(12px, 3vw, 18px)',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.background = `rgba(184,147,90,0.06)`)}
                   onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <div style={{ width: 64, height: 64, background: DS.bone, overflow: 'hidden' }}>
+                  <div style={{ width: 56, height: 56, background: DS.bone, overflow: 'hidden' }}>
                     {photo ? (
                       <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     ) : (
@@ -373,17 +405,18 @@ const backBtn: React.CSSProperties = {
   color: DS.ink, textTransform: 'uppercase', padding: 0,
 }
 
-function Stat({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={{
       padding: '14px 16px',
-      borderRight: last ? 'none' : `0.5px solid ${DS.inkHair}`,
+      borderRight: `0.5px solid ${DS.inkHair}`,
+      borderBottom: `0.5px solid ${DS.inkHair}`,
     }}>
       <Mono size={9} letter={0.22} color={DS.inkSoft}>{label}</Mono>
       <div style={{
-        fontFamily: DS.serif, fontSize: 22, fontWeight: 200,
+        fontFamily: DS.serif, fontSize: 'clamp(18px, 3.5vw, 22px)', fontWeight: 200,
         letterSpacing: '-0.02em', color: DS.ink, lineHeight: 1.15,
-        marginTop: 4, wordBreak: 'break-word',
+        marginTop: 4, overflowWrap: 'anywhere',
       }}>{value}</div>
     </div>
   )
