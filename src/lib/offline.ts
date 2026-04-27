@@ -2,7 +2,7 @@ import { openDB, type IDBPDatabase, type DBSchema } from 'idb'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabase'
 import { uploadMedia } from './storage'
-import type { PendingSighting } from '@/types'
+import type { PendingSighting, Species } from '@/types'
 
 interface TipaiDB extends DBSchema {
   pendingSightings: {
@@ -10,16 +10,30 @@ interface TipaiDB extends DBSchema {
     value: PendingSighting
     indexes: { 'by-created': string }
   }
+  speciesCache: {
+    key: string
+    value: Species
+    indexes: { 'by-name': string; 'by-category': string }
+  }
 }
 
 let dbPromise: Promise<IDBPDatabase<TipaiDB>> | null = null
 
 function getDB(): Promise<IDBPDatabase<TipaiDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<TipaiDB>('tipai-biodiversity-v2', 1, {
-      upgrade(db) {
-        const store = db.createObjectStore('pendingSightings', { keyPath: 'id' })
-        store.createIndex('by-created', 'created_at')
+    // v2 adds the speciesCache store so the species library is available
+    // for selection while offline. Existing pending sightings carry over.
+    dbPromise = openDB<TipaiDB>('tipai-biodiversity-v2', 2, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const store = db.createObjectStore('pendingSightings', { keyPath: 'id' })
+          store.createIndex('by-created', 'created_at')
+        }
+        if (oldVersion < 2) {
+          const sp = db.createObjectStore('speciesCache', { keyPath: 'id' })
+          sp.createIndex('by-name', 'common_name')
+          sp.createIndex('by-category', 'category')
+        }
       },
     })
   }
@@ -36,6 +50,11 @@ export async function getPendingSightings(): Promise<PendingSighting[]> {
   return db.getAllFromIndex('pendingSightings', 'by-created')
 }
 
+export async function getPendingSighting(id: string): Promise<PendingSighting | undefined> {
+  const db = await getDB()
+  return db.get('pendingSightings', id)
+}
+
 export async function deletePendingSighting(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('pendingSightings', id)
@@ -46,23 +65,59 @@ export async function getPendingCount(): Promise<number> {
   return db.count('pendingSightings')
 }
 
+// Number of pending sightings still awaiting species confirmation. Drives
+// the "tap to finalize" banner in AppShell when the user comes back online.
+export async function getPendingFinalizationCount(): Promise<number> {
+  const all = await getPendingSightings()
+  return all.filter(s => s.needs_finalization).length
+}
+
+// ─── Species cache (offline library) ────────────────────────────────────
+
+export async function cacheSpecies(species: Species[]): Promise<void> {
+  if (species.length === 0) return
+  const db = await getDB()
+  const tx = db.transaction('speciesCache', 'readwrite')
+  await Promise.all(species.map(sp => tx.store.put(sp)))
+  await tx.done
+}
+
+export async function getCachedSpecies(): Promise<Species[]> {
+  const db = await getDB()
+  return db.getAll('speciesCache')
+}
+
+export async function getCachedSpeciesCount(): Promise<number> {
+  const db = await getDB()
+  return db.count('speciesCache')
+}
+
 export interface SyncResult {
   attempted: number
   synced: number
+  skipped: number
   failed: { id: string; error: string }[]
 }
 
-// Upload all pending sightings stored in IndexedDB to Supabase. For each
-// pending record we (1) push the photo blobs to the sighting-media bucket,
-// (2) insert the sighting row, (3) insert the sighting_media rows, then
-// (4) remove the pending record from IndexedDB. Records that fail any
-// step stay in IndexedDB and are reported in the failed list so the
-// caller can display them; sync is safe to re-run.
+// Upload finalized pending sightings to Supabase. Sightings flagged as
+// needs_finalization are kept in IndexedDB so the user can confirm the
+// species first via the /pending finalize flow. For each ready record we
+// (1) push the photo blobs to the sighting-media bucket, (2) insert the
+// sighting row, (3) insert the sighting_media rows, then (4) remove the
+// pending record from IndexedDB. Records that fail any step stay in
+// IndexedDB and are reported in the failed list so the caller can display
+// them; sync is safe to re-run.
 export async function syncPendingSightings(userId: string): Promise<SyncResult> {
   const pending = await getPendingSightings()
-  const result: SyncResult = { attempted: pending.length, synced: 0, failed: [] }
+  const ready = pending.filter(p => !p.needs_finalization)
+  const result: SyncResult = {
+    attempted: ready.length,
+    synced: 0,
+    skipped: pending.length - ready.length,
+    failed: [],
+  }
 
-  for (const p of pending) {
+  for (const p of ready) {
     try {
       const mediaRecords: { path: string; type: PendingSighting['media'][number]['type']; mime: string; size: number }[] = []
       for (let i = 0; i < p.media.length; i++) {

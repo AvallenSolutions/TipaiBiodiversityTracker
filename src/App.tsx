@@ -6,6 +6,7 @@ import LoginPage from '@/pages/LoginPage'
 import SignUpPage from '@/pages/SignUpPage'
 import HomePage from '@/pages/HomePage'
 import NewSightingPage from '@/pages/NewSightingPage'
+import PendingSightingsPage from '@/pages/PendingSightingsPage'
 import SightingDetailPage from '@/pages/SightingDetailPage'
 import SpeciesLibraryPage from '@/pages/SpeciesLibraryPage'
 import DashboardPage from '@/pages/DashboardPage'
@@ -31,6 +32,7 @@ export default function App() {
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route index element={<HomePage />} />
         <Route path="new" element={<NewSightingPage />} />
+        <Route path="pending" element={<PendingSightingsPage />} />
         <Route path="sighting/:id" element={<SightingDetailPage />} />
         <Route path="species" element={<SpeciesLibraryPage />} />
         <Route path="admin" element={

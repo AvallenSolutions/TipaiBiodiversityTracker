@@ -1,12 +1,19 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getPendingCount, syncPendingSightings } from '@/lib/offline'
+import {
+  getPendingCount,
+  getPendingFinalizationCount,
+  syncPendingSightings,
+  cacheSpecies,
+} from '@/lib/offline'
+import { supabase } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
 import InstallPromptSheet from '@/components/InstallPromptSheet'
 import { isStandalone, isMobile } from '@/hooks/useInstallPrompt'
+import type { Species } from '@/types'
 
 type NavItem = { path: string; label: string; short: string }
 
@@ -22,6 +29,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const [isOnline, setIsOnline] = useState(navigator.onLine)
   const [pendingCount, setPendingCount] = useState(0)
+  const [needsFinalizationCount, setNeedsFinalizationCount] = useState(0)
   const [syncedCount, setSyncedCount] = useState<number | null>(null)
   const [syncFailedCount, setSyncFailedCount] = useState(0)
   const [syncing, setSyncing] = useState(false)
@@ -35,8 +43,12 @@ export default function AppShell() {
       const result = await syncPendingSightings(profile.id)
       setSyncedCount(result.synced)
       setSyncFailedCount(result.failed.length)
-      const remaining = await getPendingCount()
+      const [remaining, needs] = await Promise.all([
+        getPendingCount(),
+        getPendingFinalizationCount(),
+      ])
       setPendingCount(remaining)
+      setNeedsFinalizationCount(needs)
       if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
       syncBannerTimerRef.current = setTimeout(() => setSyncedCount(null), 4000)
     } catch (err) {
@@ -47,13 +59,39 @@ export default function AppShell() {
   }, [profile?.id])
 
   useEffect(() => {
-    function refreshPending() {
-      getPendingCount().then(setPendingCount).catch(() => {})
+    async function refreshPending() {
+      try {
+        const [count, needs] = await Promise.all([
+          getPendingCount(),
+          getPendingFinalizationCount(),
+        ])
+        setPendingCount(count)
+        setNeedsFinalizationCount(needs)
+      } catch {}
     }
     refreshPending()
     const interval = setInterval(refreshPending, 15_000)
     return () => clearInterval(interval)
   }, [])
+
+  // Prefetch the species library and warm the offline cache when online so
+  // the user can pick from the field guide later without signal.
+  useEffect(() => {
+    if (!profile?.id || !navigator.onLine) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await (supabase.from('species') as any)
+          .select('*')
+          .order('common_name')
+        if (cancelled || error) return
+        await cacheSpecies((data || []) as Species[])
+      } catch (err) {
+        console.warn('species library prefetch failed', err)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [profile?.id])
 
   useEffect(() => {
     const handleOnline = () => {
@@ -140,8 +178,8 @@ export default function AppShell() {
         <div style={bannerStyle(DS.rust)}>
           <Mono size={10} color={DS.ivory} letter={0.22}>
             {pendingCount > 0
-              ? `Offline · ${pendingCount} sighting${pendingCount === 1 ? '' : 's'} held locally — open the app on signal to sync`
-              : 'Offline · entries will sync when signal returns'}
+              ? `Offline · ${pendingCount} sighting${pendingCount === 1 ? '' : 's'} held on this phone — open the app on signal to finalize & sync`
+              : 'Offline · sightings will be saved on the phone and finalized on signal'}
           </Mono>
         </div>
       )}
@@ -161,7 +199,21 @@ export default function AppShell() {
           </Mono>
         </div>
       )}
-      {isOnline && !syncing && syncedCount === null && pendingCount > 0 && (
+      {isOnline && !syncing && syncedCount === null && needsFinalizationCount > 0 && (
+        <div style={bannerStyle(DS.rust)}>
+          <button
+            onClick={() => navigate('/pending')}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',
+              textTransform: 'uppercase', color: DS.ivory,
+            }}
+          >
+            {needsFinalizationCount} sighting{needsFinalizationCount === 1 ? '' : 's'} need finalizing · tap to identify →
+          </button>
+        </div>
+      )}
+      {isOnline && !syncing && syncedCount === null && needsFinalizationCount === 0 && pendingCount > 0 && (
         <div style={bannerStyle(DS.ochre)}>
           <button
             onClick={runSync}

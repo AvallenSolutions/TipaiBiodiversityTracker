@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { cacheSpecies, getCachedSpecies } from '@/lib/offline'
 import type { Species, SightingCategory } from '@/types'
 
 export interface NewSpeciesInput {
@@ -10,13 +11,40 @@ export interface NewSpeciesInput {
   habitat?: string | null
 }
 
+function filterCached(
+  list: Species[],
+  category?: SightingCategory,
+  search?: string,
+): Species[] {
+  let out = list
+  if (category) out = out.filter(s => s.category === category)
+  if (search) {
+    const q = search.toLowerCase()
+    out = out.filter(s =>
+      s.common_name.toLowerCase().includes(q) ||
+      (s.scientific_name?.toLowerCase().includes(q) ?? false)
+    )
+  }
+  return out.sort((a, b) => a.common_name.localeCompare(b.common_name))
+}
+
 export function useSpecies() {
   const [species, setSpecies] = useState<Species[]>([])
   const [loading, setLoading] = useState(false)
+  const [fromCache, setFromCache] = useState(false)
 
   const fetchSpecies = useCallback(async (category?: SightingCategory, search?: string) => {
     setLoading(true)
     try {
+      // Offline: serve from the cached library so the user can still pick
+      // species when logging sightings without signal.
+      if (!navigator.onLine) {
+        const cached = await getCachedSpecies()
+        setSpecies(filterCached(cached, category, search))
+        setFromCache(true)
+        return
+      }
+
       let query = (supabase.from('species') as any)
         .select('*')
         .order('common_name')
@@ -28,9 +56,25 @@ export function useSpecies() {
 
       const { data, error } = await query
       if (error) throw error
-      setSpecies((data || []) as Species[])
+      const list = (data || []) as Species[]
+      setSpecies(list)
+      setFromCache(false)
+
+      // If this was an unfiltered fetch, refresh the offline cache so the
+      // next offline session has the latest library entries.
+      if (!category && !search) {
+        cacheSpecies(list).catch(err => console.warn('species cache write failed', err))
+      }
     } catch (err) {
       console.error('Failed to fetch species:', err)
+      // Network failure mid-flight: degrade to the cache.
+      try {
+        const cached = await getCachedSpecies()
+        if (cached.length > 0) {
+          setSpecies(filterCached(cached, category, search))
+          setFromCache(true)
+        }
+      } catch {}
     } finally {
       setLoading(false)
     }
@@ -51,5 +95,5 @@ export function useSpecies() {
     return data as Species
   }, [])
 
-  return { species, loading, fetchSpecies, createSpecies }
+  return { species, loading, fromCache, fetchSpecies, createSpecies }
 }
