@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useSightings } from '@/hooks/useSightings'
+import { useSpeciesEditor } from '@/context/SpeciesEditorContext'
 import { getPendingCount } from '@/lib/offline'
 import { DS } from '@/lib/ledger-design'
 import type { LedgerView } from '@/components/Ledger/Masthead'
@@ -12,7 +13,7 @@ import { SightingDetailView } from '@/components/Ledger/SightingDetailView'
 import { SightingsListView } from '@/components/Ledger/SightingsListView'
 import { SpeciesDetailView } from '@/components/Ledger/SpeciesDetailView'
 import { SpeciesLibraryView } from '@/components/Ledger/SpeciesLibraryView'
-import type { Sighting } from '@/types'
+import type { Sighting, Species } from '@/types'
 
 function deriveInitials(name?: string | null, email?: string | null): string {
   if (name) {
@@ -34,6 +35,13 @@ export default function DashboardPage() {
   const [view, setView] = useState<LedgerView>('desk')
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null)
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null)
+  // When the user opens a species *from the Library admin* we have the
+  // full library row. Carry it through so the detail view can render the
+  // cover, description, family, native/notable flags — and the Edit
+  // button. Calls coming in from Desk or SightingDetailView only have a
+  // name; the detail view falls back to name-based rendering there.
+  const [selectedSpeciesEntry, setSelectedSpeciesEntry] = useState<Species | null>(null)
+  const { open: openEditor } = useSpeciesEditor()
 
   useEffect(() => {
     fetchSightings()
@@ -74,7 +82,19 @@ export default function DashboardPage() {
 
   function openSpecies(name: string) {
     setSelectedSpecies(name)
+    setSelectedSpeciesEntry(null)
     setView('species')
+  }
+
+  function openSpeciesEntry(entry: Species) {
+    setSelectedSpecies(entry.common_name)
+    setSelectedSpeciesEntry(entry)
+    setView('species')
+  }
+
+  function closeSpecies() {
+    setSelectedSpecies(null)
+    setSelectedSpeciesEntry(null)
   }
 
   const userInitials = deriveInitials(profile?.display_name, user?.email)
@@ -149,14 +169,16 @@ export default function DashboardPage() {
       {view === 'species' && selectedSpecies && (
         <SpeciesDetailView
           speciesName={selectedSpecies}
+          species={selectedSpeciesEntry}
           sightings={sightings}
-          onBack={() => setSelectedSpecies(null)}
+          onBack={closeSpecies}
           onOpenSighting={openSighting}
+          onEdit={selectedSpeciesEntry ? () => openEditor(selectedSpeciesEntry) : undefined}
         />
       )}
 
       {view === 'species' && !selectedSpecies && (
-        <SpeciesLibraryView />
+        <SpeciesLibraryView onOpen={openSpeciesEntry} />
       )}
     </div>
   )

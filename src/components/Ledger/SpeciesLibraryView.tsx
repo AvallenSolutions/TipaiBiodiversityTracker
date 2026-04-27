@@ -12,7 +12,9 @@ const CATEGORY_OPTIONS: ('all' | SightingCategory)[] = [
   'all', 'mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace',
 ]
 
-export function SpeciesLibraryView() {
+export function SpeciesLibraryView({ onOpen }: {
+  onOpen: (species: Species) => void
+}) {
   const { user } = useAuth()
   const { species, loading, fetchSpecies, deleteSpecies } = useSpecies()
   const { open: openEditor, savedVersion } = useSpeciesEditor()
@@ -155,6 +157,7 @@ export function SpeciesLibraryView() {
           <SpeciesCard
             key={sp.id}
             species={sp}
+            onOpen={() => { setError(null); onOpen(sp) }}
             onEdit={() => { setError(null); openEditor(sp) }}
             onDelete={() => { setError(null); setDeleteTarget(sp) }}
           />
@@ -186,9 +189,10 @@ export function SpeciesLibraryView() {
 }
 
 function SpeciesCard({
-  species, onEdit, onDelete,
+  species, onOpen, onEdit, onDelete,
 }: {
   species: Species
+  onOpen: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -199,7 +203,7 @@ function SpeciesCard({
       display: 'flex', flexDirection: 'column',
     }}>
       <button
-        onClick={onEdit}
+        onClick={onOpen}
         style={{
           width: '100%', textAlign: 'left', padding: 0,
           background: 'transparent', border: 'none', cursor: 'pointer',
