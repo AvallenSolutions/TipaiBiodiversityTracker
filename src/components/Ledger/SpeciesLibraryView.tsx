@@ -15,7 +15,8 @@ const CATEGORY_OPTIONS: ('all' | SightingCategory)[] = [
 export function SpeciesLibraryView({ onOpen }: {
   onOpen: (species: Species) => void
 }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const canEdit = profile?.role === 'naturalist' || profile?.role === 'admin'
   const { species, loading, fetchSpecies, deleteSpecies } = useSpecies()
   const { open: openEditor, savedVersion } = useSpeciesEditor()
   const [search, setSearch] = useState('')
@@ -67,7 +68,7 @@ export function SpeciesLibraryView({ onOpen }: {
         gap: 16, flexWrap: 'wrap', marginBottom: 20,
       }}>
         <div>
-          <Mono size={9} color={DS.ochre}>◆ THE LIBRARY · ADMIN</Mono>
+          <Mono size={9} color={DS.ochre}>◆ THE LIBRARY</Mono>
           <div style={{
             fontFamily: DS.serif, fontSize: 32, fontWeight: 200,
             letterSpacing: '-0.025em', marginTop: 4, color: DS.ink,
@@ -78,20 +79,24 @@ export function SpeciesLibraryView({ onOpen }: {
             fontFamily: DS.serif, fontSize: 15, fontWeight: 300, fontStyle: 'italic',
             color: DS.inkSoft, marginTop: 4,
           }}>
-            Add new entries, edit names and descriptions, manage plates.
+            {canEdit
+              ? 'Add new entries, edit names and descriptions, manage plates.'
+              : 'Browse the species reference library.'}
           </div>
         </div>
-        <button
-          onClick={() => { setError(null); openEditor('new') }}
-          style={{
-            background: DS.ochre, color: DS.ink, border: 'none',
-            padding: '14px 22px', cursor: 'pointer',
-            fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
-            textTransform: 'uppercase', fontWeight: 500,
-          }}
-        >
-          {hasSpeciesDraft(user?.id) ? 'Resume draft →' : '+ Add new species'}
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => { setError(null); openEditor('new') }}
+            style={{
+              background: DS.ochre, color: DS.ink, border: 'none',
+              padding: '14px 22px', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.28em',
+              textTransform: 'uppercase', fontWeight: 500,
+            }}
+          >
+            {hasSpeciesDraft(user?.id) ? 'Resume draft →' : '+ Add new species'}
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -157,6 +162,7 @@ export function SpeciesLibraryView({ onOpen }: {
           <SpeciesCard
             key={sp.id}
             species={sp}
+            canEdit={canEdit}
             onOpen={() => { setError(null); onOpen(sp) }}
             onEdit={() => { setError(null); openEditor(sp) }}
             onDelete={() => { setError(null); setDeleteTarget(sp) }}
@@ -189,9 +195,10 @@ export function SpeciesLibraryView({ onOpen }: {
 }
 
 function SpeciesCard({
-  species, onOpen, onEdit, onDelete,
+  species, canEdit, onOpen, onEdit, onDelete,
 }: {
   species: Species
+  canEdit: boolean
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
@@ -255,28 +262,30 @@ function SpeciesCard({
           )}
         </div>
       </button>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '8px 12px', borderTop: `0.5px solid ${DS.inkHair}`,
-      }}>
-        <button
-          onClick={onEdit}
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
-            color: DS.ink, textTransform: 'uppercase', padding: '4px 0',
-          }}
-        >Edit →</button>
-        <button
-          onClick={onDelete}
-          aria-label="Delete species"
-          style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
-            color: DS.rust, textTransform: 'uppercase', padding: '4px 0',
-          }}
-        >× Delete</button>
-      </div>
+      {canEdit && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '8px 12px', borderTop: `0.5px solid ${DS.inkHair}`,
+        }}>
+          <button
+            onClick={onEdit}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              color: DS.ink, textTransform: 'uppercase', padding: '4px 0',
+            }}
+          >Edit →</button>
+          <button
+            onClick={onDelete}
+            aria-label="Delete species"
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              color: DS.rust, textTransform: 'uppercase', padding: '4px 0',
+            }}
+          >× Delete</button>
+        </div>
+      )}
     </div>
   )
 }

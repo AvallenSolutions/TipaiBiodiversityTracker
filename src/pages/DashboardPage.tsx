@@ -173,7 +173,9 @@ export default function DashboardPage() {
           sightings={sightings}
           onBack={closeSpecies}
           onOpenSighting={openSighting}
-          onEdit={selectedSpeciesEntry ? () => openEditor(selectedSpeciesEntry) : undefined}
+          onEdit={selectedSpeciesEntry && (profile?.role === 'naturalist' || profile?.role === 'admin')
+            ? () => openEditor(selectedSpeciesEntry)
+            : undefined}
         />
       )}
 
