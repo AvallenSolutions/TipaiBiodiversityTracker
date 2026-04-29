@@ -23,7 +23,8 @@ interface SpeciesEditorContextValue {
 const Ctx = createContext<SpeciesEditorContextValue | null>(null)
 
 export function SpeciesEditorProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const canEdit = profile?.role === 'naturalist' || profile?.role === 'admin'
   const [editing, setEditing] = useState<Target | null>(null)
   const [savedVersion, setSavedVersion] = useState(0)
 
@@ -35,13 +36,11 @@ export function SpeciesEditorProvider({ children }: { children: ReactNode }) {
   // modal back to the surface without forcing the naturalist to find the
   // Species tab and re-click the button.
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id || !canEdit) return
     if (editing) return
     if (hasSpeciesDraft(user.id)) setEditing('new')
-    // Intentionally only depend on user.id: re-running on every editing
-    // change would reopen the modal immediately after a deliberate close.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, canEdit])
 
   const value = useMemo<SpeciesEditorContextValue>(
     () => ({ editing, open, close, savedVersion }),
