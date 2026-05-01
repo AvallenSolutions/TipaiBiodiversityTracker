@@ -208,7 +208,7 @@ export default function SightingDetailPage() {
           fontFamily: DS.serif, fontSize: 15, fontWeight: 300,
           margin: '4px 0 0', color: DS.ink,
         }}>
-          {sighting.profile?.display_name || sighting.profile?.email || 'Unknown'}
+          {sighting.profile?.display_name || sighting.profile?.email || 'Observer'}
         </p>
       </div>
     </div>
