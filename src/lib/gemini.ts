@@ -20,7 +20,14 @@ export async function identifySpecies(
 
   const categoryClause = category
     ? `The user has pre-classified this as a ${category} sighting — your candidates must all fall in that category.`
-    : `Determine the most likely category for each candidate from: ${CATEGORY_VALUES.join(', ')}.`
+    : `Determine the most likely category for each candidate from: ${CATEGORY_VALUES.join(', ')}.
+
+SUBJECT PRIORITY — read carefully:
+The naturalist is logging a wildlife sighting. The intentional subject is almost always an animal (mammal, bird, reptile, amphibian, insect) or a trace/sign of one. Vegetation is usually background, even when it dominates the frame.
+
+When the image contains both an animal and plants, the animal is the subject — return animal candidates first. Only return plant or fungi candidates as the top result when there is genuinely no animal visible in the frame (e.g. a deliberate close-up of leaves, bark, a flower, or a mushroom with no fauna present).
+
+Look hard for fauna before defaulting to flora: animals are often partly hidden, in low light, or small relative to surrounding foliage. A glimpsed wing, tail, eye-shine, paw, scale pattern or movement trail is enough to identify on.`
 
   const prompt = `You are an expert field biologist focused on Indian wildlife, particularly species occurring in forested estates near tiger reserves (e.g. Tipai, adjoining Pench / Tadoba landscapes).
 
