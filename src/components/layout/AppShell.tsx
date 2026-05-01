@@ -253,8 +253,8 @@ export default function AppShell() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Mono size={9} color={DS.inkSoft} letter={0.22}>{today}</Mono>
               <button
-                onClick={() => { signOut() }}
-                title="Sign out"
+                onClick={() => navigate('/settings')}
+                title="Account settings"
                 style={{
                   width: 28, height: 28, borderRadius: 14, background: DS.forest,
                   color: DS.ivory, border: 'none', cursor: 'pointer',

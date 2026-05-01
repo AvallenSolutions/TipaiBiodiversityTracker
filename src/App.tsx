@@ -13,6 +13,7 @@ import SightingDetailPage from '@/pages/SightingDetailPage'
 import SpeciesLibraryPage from '@/pages/SpeciesLibraryPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AdminPage from '@/pages/AdminPage'
+import AccountSettingsPage from '@/pages/AccountSettingsPage'
 
 export default function App() {
   const { user } = useAuth()
@@ -49,6 +50,7 @@ export default function App() {
               <AdminPage />
             </ProtectedRoute>
           } />
+          <Route path="settings" element={<AccountSettingsPage />} />
         </Route>
 
         {/* Catch-all */}
