@@ -20,6 +20,29 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
+// Cache the current profile in localStorage so the app can render fully when
+// the user re-opens the PWA offline (no network = profiles row can't be
+// fetched). Keyed by user id so signing into a different account doesn't
+// resurrect a stale profile from a previous session.
+const PROFILE_CACHE_KEY = 'tipai-profile-cache'
+
+function readCachedProfile(userId: string): Profile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { userId: string; profile: Profile }
+    return parsed.userId === userId ? parsed.profile : null
+  } catch {
+    return null
+  }
+}
+
+function writeCachedProfile(userId: string, profile: Profile) {
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ userId, profile }))
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -31,6 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        // Hydrate from the localStorage cache immediately so the UI can
+        // render even if the network round-trip below fails (offline).
+        const cached = readCachedProfile(session.user.id)
+        if (cached) setProfile(cached)
         loadProfile(session.user.id)
       } else {
         setLoading(false)
@@ -41,6 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        const cached = readCachedProfile(session.user.id)
+        if (cached) setProfile(cached)
         loadProfile(session.user.id)
       } else {
         setProfile(null)
@@ -60,9 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single()
 
       if (error) throw error
-      setProfile(data as Profile)
+      const fresh = data as Profile
+      setProfile(fresh)
+      writeCachedProfile(userId, fresh)
     } catch (err) {
-      console.error('Failed to load profile:', err)
+      // Offline or RLS error — keep whatever cached profile we hydrated
+      // earlier (if any) so the rest of the UI stays usable.
+      console.warn('Failed to load profile (using cache if present):', err)
     } finally {
       setLoading(false)
     }
@@ -122,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(k)
         }
       }
+      localStorage.removeItem(PROFILE_CACHE_KEY)
       sessionStorage.clear()
     } catch {}
 
