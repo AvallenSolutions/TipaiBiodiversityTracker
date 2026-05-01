@@ -25,8 +25,17 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Serve the cached SPA shell for any navigation so cold-launching the
+        // installed PWA offline doesn't fall through to the OS offline page
+        // (a black screen on iOS). React Router then resolves the route in JS.
+        navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//, /^\/storage\/v1\/object\//],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Take control of open clients as soon as a new SW activates so the
+        // first visit after install can serve the cached shell offline.
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*/i,
