@@ -7,19 +7,22 @@ import { getMediaUrl } from '@/lib/storage'
 import { formatCoordinates } from '@/hooks/useGeolocation'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono, MonoIcon, CAT_COLOR, ConfidenceDial } from '@/components/logger/shared'
+import { useAuth } from '@/context/AuthContext'
 import type { Sighting } from '@/types'
 
 export default function HomePage() {
+  const { user } = useAuth()
   const { sightings, loading, error, fetchSightings } = useSightings()
   const [pendingCount, setPendingCount] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
-    fetchSightings()
+    if (!user?.id) return
+    fetchSightings({ userId: user.id })
     getPendingCount().then(setPendingCount).catch(() => {})
 
     const refresh = () => {
-      fetchSightings()
+      fetchSightings({ userId: user.id })
       getPendingCount().then(setPendingCount).catch(() => {})
     }
     const onVisibility = () => { if (document.visibilityState === 'visible') refresh() }
@@ -31,7 +34,7 @@ export default function HomePage() {
       window.removeEventListener('online', refresh)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [fetchSightings])
+  }, [fetchSightings, user?.id])
 
   // Count distinct species by name. species_id is reserved for a future
   // link to the reference table; new sightings persist their AI-suggested
@@ -95,7 +98,7 @@ export default function HomePage() {
           </h2>
         </div>
         <button
-          onClick={() => fetchSightings()}
+          onClick={() => user?.id && fetchSightings({ userId: user.id })}
           style={{
             background: 'transparent', border: `0.5px solid ${DS.inkFaint}`,
             padding: '6px 10px', cursor: 'pointer',
