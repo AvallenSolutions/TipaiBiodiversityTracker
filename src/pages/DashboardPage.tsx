@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useSightings } from '@/hooks/useSightings'
 import { useSpeciesEditor } from '@/context/SpeciesEditorContext'
@@ -26,7 +25,6 @@ function deriveInitials(name?: string | null, email?: string | null): string {
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate()
   const { profile, user, signOut } = useAuth()
   const { sightings, loading, fetchSightings } = useSightings()
 
@@ -70,10 +68,9 @@ export default function DashboardPage() {
     }
   }, [fetchSightings])
 
-  const handleSignOut = useCallback(async () => {
-    await signOut()
-    navigate('/login')
-  }, [signOut, navigate])
+  const handleSignOut = useCallback(() => {
+    signOut()
+  }, [signOut])
 
   function openSighting(s: Sighting) {
     setSelectedSighting(s)

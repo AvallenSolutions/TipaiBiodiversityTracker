@@ -100,8 +100,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    // Global scope: invalidates the refresh token on the server so the
+    // session can't be silently rehydrated. Without this, Supabase's
+    // default 'local' scope only clears localStorage on this device —
+    // the underlying session stays valid and any stale token (service
+    // worker cache, BFCache, second tab) can resurrect it.
+    try {
+      await supabase.auth.signOut({ scope: 'global' })
+    } catch (err) {
+      // Even if the server call fails (e.g. offline), still wipe local
+      // state below so the user is at least logged out on this device.
+      console.warn('Server-side signOut failed, clearing local state anyway', err)
+    }
+
+    // Belt and braces: nuke every Supabase auth key in storage. The SDK
+    // should do this itself but we've seen stale tokens survive on PWAs.
+    try {
+      const keys = Object.keys(localStorage)
+      for (const k of keys) {
+        if (k.startsWith('sb-') || k.includes('supabase.auth')) {
+          localStorage.removeItem(k)
+        }
+      }
+      sessionStorage.clear()
+    } catch {}
+
+    // Reset React state immediately so any UI that re-renders before
+    // the reload doesn't briefly show the old user.
+    setUser(null)
+    setProfile(null)
+    setSession(null)
+
+    // Hard reload to flush every other source of state: service worker
+    // caches, in-memory React Query data, IndexedDB-backed Supabase
+    // session, the auth listener's pending profile fetch. Replacing the
+    // history entry means Back can't take you to the authenticated view.
+    window.location.replace('/login')
   }
 
   return (
