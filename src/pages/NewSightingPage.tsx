@@ -89,6 +89,19 @@ export default function NewSightingPage() {
   const streamRef = useRef<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
+  // Zoom state. Hardware zoom (via track constraints) is preferred — it
+  // physically zooms the camera, so the captured frame is already zoomed.
+  // When unavailable (iOS Safari, most desktops) we fall back to digital
+  // zoom: CSS transform on the live preview + center-crop on capture so the
+  // saved photo matches what the user framed.
+  const [zoom, setZoom] = useState(1)
+  const [zoomMin, setZoomMin] = useState(1)
+  const [zoomMax, setZoomMax] = useState(4)
+  const [zoomStep, setZoomStep] = useState(0.1)
+  const [hardwareZoom, setHardwareZoom] = useState(false)
+  const pinchStartDistRef = useRef<number | null>(null)
+  const pinchStartZoomRef = useRef<number>(1)
+
   // Chrome iOS (WKWebView) can't reliably open the camera via any API.
   // Safari iOS in a *browser tab* asks for getUserMedia permission on every
   // page load (the grant doesn't persist), which is awful for naturalists
@@ -120,6 +133,25 @@ export default function NewSightingPage() {
         v.srcObject = stream
         v.play().catch(() => {})
       }
+      // Probe the track for hardware zoom capabilities. Standard but not
+      // universally implemented: Android Chrome supports it, Safari does not.
+      const track = stream.getVideoTracks()[0]
+      const caps = track && typeof track.getCapabilities === 'function'
+        ? (track.getCapabilities() as any)
+        : null
+      if (caps?.zoom) {
+        setHardwareZoom(true)
+        setZoomMin(caps.zoom.min ?? 1)
+        setZoomMax(caps.zoom.max ?? 4)
+        setZoomStep(caps.zoom.step || 0.1)
+        setZoom(caps.zoom.min ?? 1)
+      } else {
+        setHardwareZoom(false)
+        setZoomMin(1)
+        setZoomMax(4)
+        setZoomStep(0.1)
+        setZoom(1)
+      }
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -137,6 +169,17 @@ export default function NewSightingPage() {
     }
   }, [stopStream, useNativeCapture])
 
+  const applyZoom = useCallback((next: number) => {
+    const clamped = Math.min(zoomMax, Math.max(zoomMin, next))
+    setZoom(clamped)
+    if (hardwareZoom && streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0]
+      if (track) {
+        track.applyConstraints({ advanced: [{ zoom: clamped }] } as any).catch(() => {})
+      }
+    }
+  }, [hardwareZoom, zoomMin, zoomMax])
+
   // Used by both the canvas capture (non-iOS) and native file input (iOS).
   // After the photo lands, the user chooses how to identify the subject —
   // AI on the photo, or pick from the library / by hand. We always route
@@ -151,12 +194,46 @@ export default function NewSightingPage() {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+
+    // Hardware zoom alters the frame at the camera, so we draw the full
+    // frame. Digital zoom only scales the on-screen preview — the underlying
+    // frame is unzoomed — so we center-crop to match what the user sees.
+    const useDigitalCrop = !hardwareZoom && zoom > 1
+    const z = useDigitalCrop ? zoom : 1
+    const sw = video.videoWidth / z
+    const sh = video.videoHeight / z
+    const sx = (video.videoWidth - sw) / 2
+    const sy = (video.videoHeight - sh) / 2
+
+    canvas.width = sw
+    canvas.height = sh
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.drawImage(video, 0, 0)
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh)
     canvas.toBlob(blob => { if (blob) commitBlob(blob) }, 'image/jpeg', 0.85)
+  }
+
+  function onPinchStart(e: React.TouchEvent) {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0]!.clientX - e.touches[1]!.clientX
+      const dy = e.touches[0]!.clientY - e.touches[1]!.clientY
+      pinchStartDistRef.current = Math.hypot(dx, dy)
+      pinchStartZoomRef.current = zoom
+    }
+  }
+
+  function onPinchMove(e: React.TouchEvent) {
+    if (e.touches.length === 2 && pinchStartDistRef.current) {
+      const dx = e.touches[0]!.clientX - e.touches[1]!.clientX
+      const dy = e.touches[0]!.clientY - e.touches[1]!.clientY
+      const dist = Math.hypot(dx, dy)
+      const ratio = dist / pinchStartDistRef.current
+      applyZoom(pinchStartZoomRef.current * ratio)
+    }
+  }
+
+  function onPinchEnd() {
+    pinchStartDistRef.current = null
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -347,10 +424,21 @@ export default function NewSightingPage() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
         {/* Viewfinder — live video unless we're using the native iOS picker */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div
+          style={{ flex: 1, position: 'relative', overflow: 'hidden', touchAction: 'none' }}
+          onTouchStart={!useNativeCapture ? onPinchStart : undefined}
+          onTouchMove={!useNativeCapture ? onPinchMove : undefined}
+          onTouchEnd={!useNativeCapture ? onPinchEnd : undefined}
+          onTouchCancel={!useNativeCapture ? onPinchEnd : undefined}
+        >
           {!useNativeCapture && (
             <video ref={videoRef} autoPlay playsInline muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover',
+                transform: !hardwareZoom && zoom > 1 ? `scale(${zoom})` : undefined,
+                transformOrigin: 'center center',
+                transition: pinchStartDistRef.current ? 'none' : 'transform 120ms ease-out',
+              }} />
           )}
 
           {/* HUD */}
@@ -451,6 +539,40 @@ export default function NewSightingPage() {
                   marginTop: 4,
                 }}
               >Copy link</button>
+            </div>
+          )}
+
+          {/* Zoom controls — preset pill row + live readout. Hidden on the
+              native iOS picker (no live preview to zoom) and when the camera
+              has errored out. Pinch-to-zoom is also wired on the viewfinder
+              container above. */}
+          {!useNativeCapture && !cameraError && !isChromeIOS && (
+            <div style={{
+              position: 'absolute', bottom: 14, left: 0, right: 0,
+              display: 'flex', justifyContent: 'center', gap: 6,
+              pointerEvents: 'none',
+            }}>
+              {[1, 2, Math.min(4, zoomMax)].filter((v, i, a) => a.indexOf(v) === i && v <= zoomMax).map(v => {
+                const active = Math.abs(zoom - v) < 0.05
+                return (
+                  <button
+                    key={v}
+                    onClick={() => applyZoom(v)}
+                    style={{
+                      pointerEvents: 'auto',
+                      minWidth: active ? 44 : 36, height: 32,
+                      borderRadius: 16, border: 'none',
+                      background: active ? DS.ivory : 'rgba(0,0,0,0.55)',
+                      color: active ? DS.ink : DS.ivory,
+                      fontFamily: DS.mono, fontSize: active ? 11 : 10,
+                      fontWeight: active ? 600 : 400, letterSpacing: '0.05em',
+                      cursor: 'pointer', padding: '0 10px',
+                    }}
+                  >
+                    {active ? `${zoom.toFixed(1)}×` : `${v}×`}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
