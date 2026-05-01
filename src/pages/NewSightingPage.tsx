@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useAuth } from '@/context/AuthContext'
 import { useGeolocation, formatCoordinates } from '@/hooks/useGeolocation'
 import { isStandalone } from '@/hooks/useInstallPrompt'
+import { useCameraPermission } from '@/hooks/useCameraPermission'
 import { useSpecies } from '@/hooks/useSpecies'
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
@@ -101,6 +102,21 @@ export default function NewSightingPage() {
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const isChromeIOS = isIOS && /CriOS/.test(navigator.userAgent)
   const useNativeCapture = isChromeIOS || (isIOS && !isStandalone())
+
+  // Track & cache camera permission state. On mount we fire a silent probe
+  // via request() — navigating to this page constitutes a user-gesture
+  // context on most platforms, so getUserMedia can run without an extra tap.
+  // If the permission was already granted, the probe releases the tracks
+  // immediately and leaves the browser's cached grant intact so the live
+  // viewfinder opens without a dialog on the camera step.
+  const cameraPermission = useCameraPermission(useNativeCapture)
+  useEffect(() => {
+    if (useNativeCapture) return
+    if (cameraPermission.state !== 'denied') {
+      cameraPermission.request()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally once on mount
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -401,9 +417,25 @@ export default function NewSightingPage() {
               alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
               padding: 32, gap: 16, background: 'rgba(0,0,0,0.85)',
             }}>
-              <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
-                {cameraError}
-              </Mono>
+              {cameraPermission.state === 'denied' ? (
+                <>
+                  <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
+                    Camera access is blocked
+                  </Mono>
+                  <div style={{
+                    fontFamily: DS.serif, fontSize: 14, fontWeight: 300, fontStyle: 'italic',
+                    color: 'rgba(232,226,211,0.7)', textAlign: 'center', lineHeight: 1.6, maxWidth: 280,
+                  }}>
+                    {isIOS
+                      ? 'Open Settings → Safari → Camera and set it to Allow, then reopen the app.'
+                      : 'Tap the lock icon in your browser address bar and allow camera access, then retry.'}
+                  </div>
+                </>
+              ) : (
+                <Mono size={9} color={DS.rust} letter={0.15} style={{ textAlign: 'center', lineHeight: 1.6 }}>
+                  {cameraError}
+                </Mono>
+              )}
               <button onClick={startCamera} style={{
                 background: DS.ivory, color: DS.ink, border: 'none',
                 fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.2em',
