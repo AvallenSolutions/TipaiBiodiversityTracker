@@ -145,7 +145,7 @@ export default function AdminPage() {
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   }}>
-                    {u.display_name || u.email}
+                    {u.display_name || u.email || '—'}
                     {isSelf && (
                       <span style={{
                         fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.15em',
@@ -160,7 +160,7 @@ export default function AdminPage() {
                     color: DS.inkSoft,
                     margin: 0,
                   }}>
-                    {u.email}
+                    {u.email || '—'}
                   </p>
                 </div>
 
@@ -241,7 +241,7 @@ export default function AdminPage() {
               color: DS.ink,
               margin: '0 0 6px',
             }}>
-              Remove <strong style={{ fontWeight: 400 }}>{deleteTarget.display_name || deleteTarget.email}</strong>?
+              Remove <strong style={{ fontWeight: 400 }}>{deleteTarget.display_name || deleteTarget.email || 'this user'}</strong>?
             </p>
             <p style={{
               fontFamily: DS.serif,

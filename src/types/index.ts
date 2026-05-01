@@ -10,7 +10,7 @@ export type MediaType = 'photo' | 'video' | 'audio'
 
 export interface Profile {
   id: string
-  email: string
+  email?: string | null
   display_name: string | null
   role: UserRole
   created_at: string

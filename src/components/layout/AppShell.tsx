@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
 ]
 
 export default function AppShell() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -147,7 +147,7 @@ export default function AppShell() {
   ]
 
   const today = format(new Date(), 'd MMM yyyy').toUpperCase()
-  const initials = (profile?.display_name || profile?.email || 'N')
+  const initials = (profile?.display_name || user?.email || 'N')
     .split(/\s+/).map(s => s[0]).join('').slice(0, 2).toUpperCase()
 
   // Hide masthead on the camera capture step — NewSightingPage renders its own
