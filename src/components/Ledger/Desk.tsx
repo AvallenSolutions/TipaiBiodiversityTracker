@@ -2,9 +2,14 @@ import { useMemo, useState } from 'react'
 import { formatDistanceToNow, format, subMonths, startOfMonth } from 'date-fns'
 import { DS, normalizeConf, getFlag, catLetter } from '../../lib/ledger-design'
 import { getMediaUrl } from '../../lib/storage'
-import type { Sighting } from '../../types'
+import { CAT_COLOR } from '../logger/shared'
+import type { Sighting, SightingCategory } from '../../types'
 import { Mono, StatBlock, CatDot, ConfPill, FlagTag, Sparkline } from './shared'
 import { ReserveMap } from './ReserveMap'
+
+const CATEGORY_ORDER: SightingCategory[] = [
+  'mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace',
+]
 
 export interface SpeciesEntry {
   common: string
@@ -66,6 +71,47 @@ export function buildDailyTrend(sightings: Sighting[], days = 30): number[] {
   for (const s of sightings) {
     const diff = Math.floor((now.getTime() - new Date(s.sighted_at).getTime()) / 86400000)
     if (diff >= 0 && diff < days) buckets[days - 1 - diff]++
+  }
+  return buckets
+}
+
+export interface DailyCategoryBucket {
+  date: Date
+  counts: Record<SightingCategory, number>
+  total: number
+}
+
+// Per-day, per-category bucketing for the activity chart. Days are aligned to
+// midnight in local time and the array is in chronological order (oldest →
+// newest), so index 0 is `days-1` days ago and index `days-1` is today.
+export function buildDailyTrendByCategory(
+  sightings: Sighting[],
+  days = 30,
+): DailyCategoryBucket[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const start = new Date(today)
+  start.setDate(start.getDate() - (days - 1))
+
+  const buckets: DailyCategoryBucket[] = []
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start)
+    d.setDate(d.getDate() + i)
+    buckets.push({
+      date: d,
+      counts: { mammal: 0, bird: 0, reptile: 0, amphibian: 0, insect: 0, plant: 0, fungi: 0, trace: 0 },
+      total: 0,
+    })
+  }
+
+  for (const s of sightings) {
+    const sd = new Date(s.sighted_at)
+    const diff = Math.floor((sd.getTime() - start.getTime()) / 86400000)
+    if (diff >= 0 && diff < days) {
+      const bucket = buckets[diff]!
+      bucket.counts[s.category]++
+      bucket.total++
+    }
   }
   return buckets
 }
@@ -246,6 +292,70 @@ function SpeciesLibrary({
   )
 }
 
+// ─── Activity Chart ─────────────────────────────────────────────────────────
+
+function ActivityChart({
+  buckets, monthTicks,
+}: {
+  buckets: DailyCategoryBucket[]
+  monthTicks: { idx: number; label: string }[]
+}) {
+  const days = buckets.length
+  // Use a fixed virtual coord space (10 units per day, 100 tall) and stretch
+  // it horizontally with preserveAspectRatio="none". Bars stay crisp because
+  // they're flat fills; only proportions change with container width.
+  const W = days * 10
+  const H = 100
+  const max = Math.max(...buckets.map(b => b.total), 1)
+
+  return (
+    <div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {buckets.map((b, i) => {
+          if (b.total === 0) return null
+          const colW = 10 - 1
+          const x = i * 10
+          let yCursor = H
+          // Stack categories from bottom up in CATEGORY_ORDER so colours line
+          // up consistently across days.
+          return CATEGORY_ORDER.map(cat => {
+            const v = b.counts[cat]
+            if (v === 0) return null
+            const segH = (v / max) * (H - 4)
+            const y = yCursor - segH
+            yCursor = y
+            return (
+              <rect
+                key={`${i}-${cat}`}
+                x={x} y={y} width={colW} height={segH}
+                fill={CAT_COLOR[cat]}
+              />
+            )
+          })
+        })}
+      </svg>
+      {/* X-axis month labels — positioned proportionally so they line up with
+          the bar above regardless of container width. */}
+      <div style={{ position: 'relative', height: 14, marginTop: 4 }}>
+        {monthTicks.map(({ idx, label }) => (
+          <div
+            key={label + idx}
+            style={{
+              position: 'absolute',
+              left: `${((idx + 0.5) / days) * 100}%`,
+              transform: 'translateX(-50%)',
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.12em',
+              color: DS.inkSoft, whiteSpace: 'nowrap',
+            }}
+          >
+            {label.toUpperCase()}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Desk ────────────────────────────────────────────────────────────────────
 
 export function Desk({
@@ -256,7 +366,33 @@ export function Desk({
   onOpenSpecies: (name: string) => void
 }) {
   const library = useMemo(() => buildSpeciesLibrary(sightings), [sightings])
-  const trend = useMemo(() => buildDailyTrend(sightings, 30), [sightings])
+  const trendByCategory = useMemo(() => buildDailyTrendByCategory(sightings, 30), [sightings])
+
+  // Categories present in the window — drives the legend so we don't render
+  // entries for taxa with zero records in the last 30 days.
+  const presentCategories = useMemo(() => {
+    const seen = new Set<SightingCategory>()
+    for (const b of trendByCategory) {
+      for (const cat of CATEGORY_ORDER) if (b.counts[cat] > 0) seen.add(cat)
+    }
+    return CATEGORY_ORDER.filter(c => seen.has(c))
+  }, [trendByCategory])
+
+  // Month tick labels: emit one per month transition that lands inside the
+  // visible window (plus the very first day so the chart isn't unlabelled
+  // when the whole window is in the same month).
+  const monthTicks = useMemo(() => {
+    const ticks: { idx: number; label: string }[] = []
+    let lastMonth = -1
+    trendByCategory.forEach((b, idx) => {
+      const m = b.date.getMonth()
+      if (m !== lastMonth) {
+        ticks.push({ idx, label: format(b.date, 'd MMM') })
+        lastMonth = m
+      }
+    })
+    return ticks
+  }, [trendByCategory])
 
   const today = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0)
@@ -293,30 +429,30 @@ export function Desk({
         <StatBlock label="Tiger Sightings" value={tigers} accent />
       </div>
 
-      {/* 30-day trend */}
+      {/* 30-day trend — stacked by category */}
       <div style={{ marginBottom: 40 }}>
         <Mono size={9} color={DS.ochre}>◆ §00 · ACTIVITY · LAST 30 DAYS</Mono>
         <div style={{
           background: DS.ivory, border: `0.5px solid ${DS.ink}`,
           padding: '16px 20px', marginTop: 10,
         }}>
-          <svg width="100%" height={48} viewBox="0 0 300 48" preserveAspectRatio="none">
-            {trend.map((v, i) => {
-              const max = Math.max(...trend, 1)
-              const bh = (v / max) * 40
-              return (
-                <rect
-                  key={i}
-                  x={(i / 30) * 300}
-                  y={48 - bh}
-                  width={300 / 30 - 1}
-                  height={bh}
-                  fill={DS.ochre}
-                  opacity={0.65}
-                />
-              )
-            })}
-          </svg>
+          <ActivityChart buckets={trendByCategory} monthTicks={monthTicks} />
+          {presentCategories.length > 0 && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: '8px 18px',
+              marginTop: 14, paddingTop: 12, borderTop: `0.5px solid ${DS.inkHair}`,
+            }}>
+              {presentCategories.map(cat => (
+                <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    width: 10, height: 10, borderRadius: 2,
+                    background: CAT_COLOR[cat], display: 'inline-block',
+                  }} />
+                  <Mono size={9} letter={0.18} color={DS.inkSoft}>{cat.toUpperCase()}</Mono>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
