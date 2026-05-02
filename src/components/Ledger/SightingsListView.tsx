@@ -252,6 +252,11 @@ export function SightingsListView({
                     <Mono size={9} letter={0.12} color={DS.inkSoft}>
                       {s.category.toUpperCase()} · {format(new Date(s.sighted_at), 'd MMM yyyy · HH:mm')}
                     </Mono>
+                    {(s.profile?.display_name || s.profile?.email) && (
+                      <Mono size={9} letter={0.12} color={DS.inkSoft}>
+                        BY {(s.profile?.display_name || s.profile?.email || '').toUpperCase()}
+                      </Mono>
+                    )}
                     {s.latitude != null && s.longitude != null && (
                       <Mono size={9} letter={0.1} color={DS.inkFaint}>
                         {s.latitude.toFixed(4)}°N · {s.longitude.toFixed(4)}°E
