@@ -12,18 +12,23 @@ import type { Sighting } from '@/types'
 
 export default function HomePage() {
   const { user } = useAuth()
-  const { sightings, loading, error, fetchSightings } = useSightings()
+  const { sightings, loading, error, fetchSightings, clearSightings } = useSightings()
   const [pendingCount, setPendingCount] = useState(0)
   const navigate = useNavigate()
 
   useEffect(() => {
+    // Wipe whatever was on screen before fetching for the new user. Without
+    // this, switching accounts on the same device (or signing in via magic
+    // link with a stale React state) would briefly show the previous user's
+    // sightings before the new fetch resolves.
+    clearSightings()
     if (!user?.id) return
     fetchSightings({ userId: user.id })
-    getPendingCount().then(setPendingCount).catch(() => {})
+    getPendingCount(user.id).then(setPendingCount).catch(() => {})
 
     const refresh = () => {
       fetchSightings({ userId: user.id })
-      getPendingCount().then(setPendingCount).catch(() => {})
+      getPendingCount(user.id).then(setPendingCount).catch(() => {})
     }
     const onVisibility = () => { if (document.visibilityState === 'visible') refresh() }
     window.addEventListener('focus', refresh)
@@ -34,7 +39,7 @@ export default function HomePage() {
       window.removeEventListener('online', refresh)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [fetchSightings, user?.id])
+  }, [fetchSightings, clearSightings, user?.id])
 
   // Count distinct species by name. species_id is reserved for a future
   // link to the reference table; new sightings persist their AI-suggested

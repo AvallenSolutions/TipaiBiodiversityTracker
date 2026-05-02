@@ -60,16 +60,23 @@ export async function deletePendingSighting(id: string): Promise<void> {
   await db.delete('pendingSightings', id)
 }
 
-export async function getPendingCount(): Promise<number> {
-  const db = await getDB()
-  return db.count('pendingSightings')
+// Pending count, optionally scoped to a single user. The unscoped variant
+// remains for legacy callers that genuinely want every record on the device.
+export async function getPendingCount(userId?: string): Promise<number> {
+  if (!userId) {
+    const db = await getDB()
+    return db.count('pendingSightings')
+  }
+  const all = await getPendingSightings()
+  return all.filter(p => p.user_id === userId).length
 }
 
 // Number of pending sightings still awaiting species confirmation. Drives
 // the "tap to finalize" banner in AppShell when the user comes back online.
-export async function getPendingFinalizationCount(): Promise<number> {
+export async function getPendingFinalizationCount(userId?: string): Promise<number> {
   const all = await getPendingSightings()
-  return all.filter(s => s.needs_finalization).length
+  const owned = userId ? all.filter(s => s.user_id === userId) : all
+  return owned.filter(s => s.needs_finalization).length
 }
 
 // ─── Species cache (offline library) ────────────────────────────────────
@@ -109,11 +116,18 @@ export interface SyncResult {
 // them; sync is safe to re-run.
 export async function syncPendingSightings(userId: string): Promise<SyncResult> {
   const pending = await getPendingSightings()
-  const ready = pending.filter(p => !p.needs_finalization)
+  // Only sync sightings that were originally logged by the currently
+  // signed-in user. If a different user signs into the same device, we
+  // never reassign their predecessor's pending sightings to them — those
+  // stay in IndexedDB until the original user signs in again. Without
+  // this guard, a guest who magic-links into the app on a shared phone
+  // would end up owning whatever the previous occupant hadn't yet synced.
+  const own = pending.filter(p => p.user_id === userId)
+  const ready = own.filter(p => !p.needs_finalization)
   const result: SyncResult = {
     attempted: ready.length,
     synced: 0,
-    skipped: pending.length - ready.length,
+    skipped: own.length - ready.length,
     failed: [],
   }
 

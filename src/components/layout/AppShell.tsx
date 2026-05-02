@@ -44,8 +44,8 @@ export default function AppShell() {
       setSyncedCount(result.synced)
       setSyncFailedCount(result.failed.length)
       const [remaining, needs] = await Promise.all([
-        getPendingCount(),
-        getPendingFinalizationCount(),
+        getPendingCount(profile.id),
+        getPendingFinalizationCount(profile.id),
       ])
       setPendingCount(remaining)
       setNeedsFinalizationCount(needs)
@@ -59,11 +59,17 @@ export default function AppShell() {
   }, [profile?.id])
 
   useEffect(() => {
+    if (!profile?.id) {
+      setPendingCount(0)
+      setNeedsFinalizationCount(0)
+      return
+    }
+    const uid = profile.id
     async function refreshPending() {
       try {
         const [count, needs] = await Promise.all([
-          getPendingCount(),
-          getPendingFinalizationCount(),
+          getPendingCount(uid),
+          getPendingFinalizationCount(uid),
         ])
         setPendingCount(count)
         setNeedsFinalizationCount(needs)
@@ -72,7 +78,7 @@ export default function AppShell() {
     refreshPending()
     const interval = setInterval(refreshPending, 15_000)
     return () => clearInterval(interval)
-  }, [])
+  }, [profile?.id])
 
   // Prefetch the species library and warm the offline cache when online so
   // the user can pick from the field guide later without signal.
@@ -99,8 +105,8 @@ export default function AppShell() {
       // If we just transitioned from offline -> online and there are
       // pending sightings, push them to Supabase. The runSync helper
       // updates pendingCount and the synced banner on success.
-      if (!prevOnlineRef.current) {
-        getPendingCount().then(count => {
+      if (!prevOnlineRef.current && profile?.id) {
+        getPendingCount(profile.id).then(count => {
           if (count > 0) runSync()
           else {
             setSyncedCount(0)
@@ -116,7 +122,9 @@ export default function AppShell() {
       setIsOnline(false)
       setSyncedCount(null)
       prevOnlineRef.current = false
-      getPendingCount().then(setPendingCount).catch(() => {})
+      if (profile?.id) {
+        getPendingCount(profile.id).then(setPendingCount).catch(() => {})
+      }
     }
 
     window.addEventListener('online', handleOnline)
@@ -126,14 +134,14 @@ export default function AppShell() {
       window.removeEventListener('offline', handleOffline)
       if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current)
     }
-  }, [runSync])
+  }, [runSync, profile?.id])
 
   // Also try to sync on mount when starting up online — covers the case
   // where the browser was relaunched after going offline (no online event
   // fires because the network state is the same as the saved state).
   useEffect(() => {
     if (navigator.onLine && profile?.id) {
-      getPendingCount().then(count => {
+      getPendingCount(profile.id).then(count => {
         if (count > 0) runSync()
       }).catch(() => {})
     }
