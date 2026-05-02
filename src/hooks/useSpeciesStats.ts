@@ -37,7 +37,7 @@ export function useSpeciesStats(species: Species | null) {
         if (species.scientific_name) orFilters.push(`scientific_name.eq.${escapeOr(species.scientific_name)}`)
 
         const { data, error } = await (supabase.from('sightings') as any)
-          .select('id, sighted_at, latitude, longitude, media:sighting_media(storage_path, media_type)')
+          .select('id, species_id, sighted_at, latitude, longitude, media:sighting_media(storage_path, media_type)')
           .or(orFilters.join(','))
           .order('sighted_at', { ascending: false })
         if (error) throw error
@@ -45,6 +45,7 @@ export function useSpeciesStats(species: Species | null) {
 
         type Row = {
           id: string
+          species_id: string | null
           sighted_at: string | null
           latitude: number
           longitude: number
@@ -60,7 +61,12 @@ export function useSpeciesStats(species: Species | null) {
             territories.add(key)
           }
           if (r.sighted_at && (!earliest || r.sighted_at < earliest)) earliest = r.sighted_at
-          if (!coverPhotoUrl) {
+          // Cover photo: only trust sightings explicitly linked via the
+          // species_id FK. Name matches feed the stats counts but they're
+          // too loose to pick a representative photo from — a sighting
+          // mistakenly logged with this species' name (e.g. AI misID the
+          // user didn't correct) would otherwise become the folio cover.
+          if (!coverPhotoUrl && r.species_id === species.id) {
             const photo = r.media?.find(m => m.media_type === 'photo')
             if (photo?.storage_path) coverPhotoUrl = getMediaUrl(photo.storage_path)
           }
