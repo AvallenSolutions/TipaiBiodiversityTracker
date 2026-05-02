@@ -627,6 +627,19 @@ export default function NewSightingPage() {
               <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', background: DS.ivory }} />
             </button>
           )}
+
+          {/* Secondary CTA: bulk upload from external camera (SLR / SD card /
+              photo library). Opens a separate flow that reads EXIF, runs AI
+              on each photo, and saves them as multiple sightings. */}
+          <button
+            onClick={() => navigate('/upload')}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.22em',
+              textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)',
+              padding: '4px 10px',
+            }}
+          >⊞ Upload from camera</button>
         </div>
 
         <input
