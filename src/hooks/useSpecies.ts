@@ -9,6 +9,7 @@ export interface NewSpeciesInput {
   category: SightingCategory
   description?: string | null
   habitat?: string | null
+  reference_image_url?: string | null
 }
 
 function filterCached(
@@ -88,6 +89,7 @@ export function useSpecies() {
         category: input.category,
         description: input.description ?? null,
         habitat: input.habitat ?? null,
+        reference_image_url: input.reference_image_url ?? null,
       })
       .select('*')
       .single()

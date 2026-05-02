@@ -235,6 +235,7 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 ['LONGITUDE', sighting.longitude != null ? `${sighting.longitude.toFixed(6)}°` : '—'],
                 ['GPS ACCURACY', sighting.location_accuracy ? `±${Math.round(sighting.location_accuracy)}m` : '—'],
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
+                ['OBSERVER', sighting.profile?.display_name || sighting.profile?.email || '—'],
               ] as [string, string | number][]).map(([k, v]) => (
                 <div key={k} style={{ padding: '8px 0', borderBottom: `0.5px dashed ${DS.inkHair}` }}>
                   <Mono size={8} letter={0.22} color={DS.inkSoft}>{k}</Mono>
@@ -380,10 +381,15 @@ function PromoteToSpeciesSheet({
   onError: (msg: string) => void
 }) {
   const { createSpecies } = useSpecies()
+  // Pre-fill from the sighting itself: the AI description (if any) and the
+  // photo go straight into the new species folio so the naturalist doesn't
+  // have to re-type the description or re-upload the image.
+  const aiDescription = sighting.ai_suggestions?.[0]?.description ?? ''
+  const sightingPhotoUrl = getPhotoUrl(sighting)
   const [common, setCommon] = useState(sighting.common_name ?? '')
   const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
   const [category, setCategory] = useState<SightingCategory>(sighting.category)
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(aiDescription)
   const [habitat, setHabitat] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -400,6 +406,7 @@ function PromoteToSpeciesSheet({
         category,
         description: description.trim() || null,
         habitat: habitat.trim() || null,
+        reference_image_url: sightingPhotoUrl,
       })
       const { error: updateError } = await (supabase.from('sightings') as any)
         .update({
