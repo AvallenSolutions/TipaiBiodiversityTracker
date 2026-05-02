@@ -14,6 +14,7 @@ import SpeciesLibraryPage from '@/pages/SpeciesLibraryPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AdminPage from '@/pages/AdminPage'
 import AccountSettingsPage from '@/pages/AccountSettingsPage'
+import BulkUploadPage from '@/pages/BulkUploadPage'
 
 export default function App() {
   const { user } = useAuth()
@@ -51,6 +52,7 @@ export default function App() {
             </ProtectedRoute>
           } />
           <Route path="settings" element={<AccountSettingsPage />} />
+          <Route path="upload" element={<BulkUploadPage />} />
         </Route>
 
         {/* Catch-all */}
