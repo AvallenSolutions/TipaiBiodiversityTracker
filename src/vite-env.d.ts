@@ -9,3 +9,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// Build-time-injected list of bundled species reference photos in
+// /public/species-images. See vite.config.ts and src/lib/speciesImages.ts.
+declare const __SPECIES_IMAGES__: string[]

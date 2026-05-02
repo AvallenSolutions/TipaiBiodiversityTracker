@@ -1,9 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readdirSync } from 'fs'
 import path from 'path'
 
+// Inject the list of bundled species reference photos at build time.
+// public/species-images contains ~870 curated JPGs keyed by an uppercase,
+// underscore-separated common name. The runtime helper in src/lib/speciesImages
+// turns this list into a normalized lookup map so the species folio can show
+// a curated photo when no user-uploaded reference_image_url exists.
+const bundledSpeciesImages = (() => {
+  try {
+    return readdirSync(path.resolve(__dirname, 'public/species-images'))
+      .filter(f => /\.jpe?g$/i.test(f))
+  } catch {
+    return []
+  }
+})()
+
 export default defineConfig({
+  define: {
+    __SPECIES_IMAGES__: JSON.stringify(bundledSpeciesImages),
+  },
   plugins: [
     react(),
     VitePWA({
