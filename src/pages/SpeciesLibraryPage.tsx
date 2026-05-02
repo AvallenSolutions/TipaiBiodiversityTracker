@@ -3,6 +3,7 @@ import { useSpecies } from '@/hooks/useSpecies'
 import { DS } from '@/lib/ledger-design'
 import { Mono, MonoIcon } from '@/components/logger/shared'
 import SpeciesDetailSheet from '@/components/SpeciesDetailSheet'
+import { getBundledSpeciesImage } from '@/lib/speciesImages'
 import type { Species, SightingCategory } from '@/types'
 
 const CATEGORIES: { value: SightingCategory | ''; label: string }[] = [
@@ -140,16 +141,19 @@ export default function SpeciesLibraryPage() {
                   color: DS.forest, flexShrink: 0, overflow: 'hidden',
                   background: DS.ivory,
                 }}>
-                  {sp.reference_image_url ? (
-                    <img
-                      src={sp.reference_image_url}
-                      alt={sp.common_name}
-                      loading="lazy"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    />
-                  ) : (
-                    <MonoIcon category={sp.category} size={24} />
-                  )}
+                  {(() => {
+                    const thumb = sp.reference_image_url ?? getBundledSpeciesImage(sp.common_name)
+                    return thumb ? (
+                      <img
+                        src={thumb}
+                        alt={sp.common_name}
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : (
+                      <MonoIcon category={sp.category} size={24} />
+                    )
+                  })()}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <h3 style={{

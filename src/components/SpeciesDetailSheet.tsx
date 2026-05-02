@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
 import { useSpeciesStats } from '@/hooks/useSpeciesStats'
+import { getBundledSpeciesImage } from '@/lib/speciesImages'
 import type { Species } from '@/types'
 
 interface Props {
@@ -12,16 +13,26 @@ interface Props {
 
 export default function SpeciesDetailSheet({ species, onClose }: Props) {
   const { stats, loading } = useSpeciesStats(species)
-  // Cover priority: explicit library plate, else most recent linked sighting
-  // photo (loaded by useSpeciesStats), else null → "No plate on file".
-  const coverFallback = species.reference_image_url ?? stats?.coverPhotoUrl ?? null
+  // Cover priority:
+  //   1. explicit library plate (user-uploaded reference_image_url)
+  //   2. curated bundled photo (/public/species-images/<NAME>.jpg)
+  //   3. most recent FK-linked sighting photo (from useSpeciesStats)
+  //   4. null → "No plate on file"
+  const bundled = getBundledSpeciesImage(species.common_name)
+  const coverFallback =
+    species.reference_image_url ?? bundled ?? stats?.coverPhotoUrl ?? null
   const [activeImage, setActiveImage] = useState<string | null>(coverFallback)
 
   // Reset cover when sheet opens for a different species, and pick up the
   // sighting-derived fallback once useSpeciesStats resolves.
   useEffect(() => {
-    setActiveImage(species.reference_image_url ?? stats?.coverPhotoUrl ?? null)
-  }, [species.id, species.reference_image_url, stats?.coverPhotoUrl])
+    setActiveImage(
+      species.reference_image_url
+        ?? getBundledSpeciesImage(species.common_name)
+        ?? stats?.coverPhotoUrl
+        ?? null,
+    )
+  }, [species.id, species.common_name, species.reference_image_url, stats?.coverPhotoUrl])
 
   // Lock body scroll while the sheet is open.
   useEffect(() => {
@@ -38,14 +49,17 @@ export default function SpeciesDetailSheet({ species, onClose }: Props) {
   }, [onClose])
 
   // Image carousel: explicit gallery first; if neither library plate nor
-  // gallery exist, fall back to the sighting-derived cover so users still
-  // get a single thumbnail to look at.
+  // gallery exist, fall back to the bundled curated plate, then the
+  // sighting-derived cover, so users always get something to look at when
+  // anything's available.
+  const hasExplicit =
+    !!species.reference_image_url
+    || (species.gallery_image_urls && species.gallery_image_urls.length > 0)
   const allImages = [
     species.reference_image_url,
     ...(species.gallery_image_urls || []),
-    ...(!species.reference_image_url && (!species.gallery_image_urls || species.gallery_image_urls.length === 0) && stats?.coverPhotoUrl
-      ? [stats.coverPhotoUrl]
-      : []),
+    ...(!hasExplicit && bundled ? [bundled] : []),
+    ...(!hasExplicit && !bundled && stats?.coverPhotoUrl ? [stats.coverPhotoUrl] : []),
   ].filter((u): u is string => !!u)
 
   const firstSeenLabel = stats?.firstSeenAt

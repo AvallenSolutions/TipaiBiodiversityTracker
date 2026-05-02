@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import { DS } from '../../lib/ledger-design'
 import { getMediaUrl } from '../../lib/storage'
+import { getBundledSpeciesImage } from '../../lib/speciesImages'
 import type { Sighting, Species } from '../../types'
 import { Mono, PhotoPlaceholder, TrendChart } from './shared'
 import { buildSpeciesLibrary } from './Desk'
@@ -111,8 +112,10 @@ export function SpeciesDetailView({
     return format(d, 'MMM').toUpperCase()
   })
 
-  // Hero photo: library cover wins, then the most recent sighting photo.
+  // Hero photo priority: explicit library plate, then a curated bundled
+  // reference photo, then the most recent FK-matched sighting photo.
   const heroPhoto = species?.reference_image_url
+    ?? getBundledSpeciesImage(display.common)
     ?? matching.map(getPhotoUrl).find(Boolean)
     ?? null
 
