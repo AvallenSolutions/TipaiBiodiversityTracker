@@ -4,6 +4,7 @@ import { useSpecies } from '../../hooks/useSpecies'
 import { useAuth } from '../../context/AuthContext'
 import { useSpeciesEditor } from '../../context/SpeciesEditorContext'
 import { hasSpeciesDraft } from '../../lib/speciesDraft'
+import { getBundledSpeciesImage } from '../../lib/speciesImages'
 import type { Species, SightingCategory } from '../../types'
 import { Mono, CatDot } from './shared'
 import { MonoIcon } from '../logger/shared'
@@ -221,19 +222,22 @@ function SpeciesCard({
           width: '100%', aspectRatio: '4 / 3', background: DS.bone, overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          {species.reference_image_url ? (
-            <img
-              src={species.reference_image_url}
-              alt={species.common_name}
-              loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          ) : (
-            <div style={{ color: DS.inkFaint, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <MonoIcon category={species.category} size={36} />
-              <Mono size={8} color={DS.inkFaint} letter={0.22}>No plate</Mono>
-            </div>
-          )}
+          {(() => {
+            const cover = species.reference_image_url ?? getBundledSpeciesImage(species.common_name)
+            return cover ? (
+              <img
+                src={cover}
+                alt={species.common_name}
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            ) : (
+              <div style={{ color: DS.inkFaint, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <MonoIcon category={species.category} size={36} />
+                <Mono size={8} color={DS.inkFaint} letter={0.22}>No plate</Mono>
+              </div>
+            )
+          })()}
         </div>
         <div style={{ padding: '14px 16px 8px', flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
