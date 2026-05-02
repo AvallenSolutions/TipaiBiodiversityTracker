@@ -37,13 +37,27 @@ export function useSightings() {
       const { data, error: fetchError } = await query
 
       if (fetchError) throw fetchError
-      setSightings((data || []) as Sighting[])
+      // Belt-and-braces post-filter: even if the server-side .eq() were
+      // somehow stripped (stale bundle, RLS misconfig), we never let a
+      // sighting belonging to another user leak into a user-scoped feed.
+      const list = (data || []) as Sighting[]
+      const final = filters?.userId
+        ? list.filter(s => s.user_id === filters.userId)
+        : list
+      setSightings(final)
     } catch (err: any) {
       setError(err.message)
       console.error('Failed to fetch sightings:', err)
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  // Clear the in-memory list — used by callers that need to wipe data
+  // when the active user changes, so stale rows from the previous account
+  // don't flash on screen before the new fetch resolves.
+  const clearSightings = useCallback(() => {
+    setSightings([])
   }, [])
 
   const deleteSighting = useCallback(async (id: string) => {
@@ -68,5 +82,5 @@ export function useSightings() {
     return updateSighting(id, { verification_status: 'verified' })
   }, [updateSighting])
 
-  return { sightings, loading, error, fetchSightings, deleteSighting, updateSighting, verifySighting }
+  return { sightings, loading, error, fetchSightings, clearSightings, deleteSighting, updateSighting, verifySighting }
 }

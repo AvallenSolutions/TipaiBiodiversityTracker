@@ -43,16 +43,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchSightings()
-    getPendingCount().then(setPendingCount).catch(() => {})
+    if (user?.id) getPendingCount(user.id).then(setPendingCount).catch(() => {})
 
     const onOnline = () => {
       setIsOnline(true)
       fetchSightings()
-      getPendingCount().then(setPendingCount).catch(() => {})
+      if (user?.id) getPendingCount(user.id).then(setPendingCount).catch(() => {})
     }
     const onOffline = () => {
       setIsOnline(false)
-      getPendingCount().then(setPendingCount).catch(() => {})
+      if (user?.id) getPendingCount(user.id).then(setPendingCount).catch(() => {})
     }
     const onFocus = () => fetchSightings()
     const onVisibility = () => { if (document.visibilityState === 'visible') fetchSightings() }

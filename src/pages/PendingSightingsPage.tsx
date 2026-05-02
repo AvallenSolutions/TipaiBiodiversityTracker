@@ -39,11 +39,14 @@ export default function PendingSightingsPage() {
     setLoading(true)
     try {
       const all = await getPendingSightings()
-      setPending(all)
+      // Only show pending sightings owned by the currently signed-in user.
+      // A shared device should not surface another user's pending records.
+      const own = profile?.id ? all.filter(p => p.user_id === profile.id) : []
+      setPending(own)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [profile?.id])
 
   useEffect(() => { refresh() }, [refresh])
 
