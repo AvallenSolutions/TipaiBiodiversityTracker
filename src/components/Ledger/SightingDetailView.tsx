@@ -6,6 +6,7 @@ import { getMediaUrl } from '../../lib/storage'
 import { useSpecies } from '../../hooks/useSpecies'
 import { useSightings } from '../../hooks/useSightings'
 import { useAuth } from '../../context/AuthContext'
+import { PARK_LABEL } from '../../types'
 import type { Sighting, SightingCategory } from '../../types'
 import { Mono, PhotoPlaceholder } from './shared'
 
@@ -236,6 +237,8 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 ['GPS ACCURACY', sighting.location_accuracy ? `±${Math.round(sighting.location_accuracy)}m` : '—'],
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
                 ['OBSERVER', sighting.profile?.display_name || sighting.profile?.email || '—'],
+                ...(sighting.tiger?.name ? [['TIGER', sighting.tiger.name]] as [string, string][] : []),
+                ...(sighting.park ? [['PARK', PARK_LABEL[sighting.park]]] as [string, string][] : []),
               ] as [string, string | number][]).map(([k, v]) => (
                 <div key={k} style={{ padding: '8px 0', borderBottom: `0.5px dashed ${DS.inkHair}` }}>
                   <Mono size={8} letter={0.22} color={DS.inkSoft}>{k}</Mono>

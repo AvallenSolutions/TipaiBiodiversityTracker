@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { DS } from '../../lib/ledger-design'
 import { useAuth } from '../../context/AuthContext'
 import { Mono, Rule } from './shared'
-import type { Sighting } from '../../types'
+import type { Sighting, TigerIndividual } from '../../types'
 
-export type LedgerView = 'desk' | 'sighting' | 'species'
+export type LedgerView = 'desk' | 'sighting' | 'species' | 'tigers'
 
 export function Masthead({
-  view, onNav, selectedSighting, selectedSpecies, onSignOut, userInitials,
+  view, onNav, selectedSighting, selectedSpecies, selectedTiger, onSignOut, userInitials,
 }: {
   view: LedgerView
   onNav: (v: LedgerView) => void
   selectedSighting?: Sighting | null
   selectedSpecies?: string | null
+  selectedTiger?: TigerIndividual | null
   onSignOut: () => void
   userInitials: string
 }) {
@@ -24,6 +25,7 @@ export function Masthead({
     { id: 'desk', label: 'Front Desk' },
     { id: 'sighting', label: 'Sighting' },
     { id: 'species', label: 'Species' },
+    { id: 'tigers', label: 'Tigers' },
   ]
 
   const appNav: { path: string; label: string; active?: boolean }[] = [
@@ -49,14 +51,20 @@ export function Masthead({
       ? <>Recent <em style={{ fontStyle: 'italic', fontWeight: 300 }}>entries</em>.</>
       : view === 'species' && selectedSpecies
       ? <><em style={{ fontStyle: 'italic', fontWeight: 300 }}>{selectedSpecies}</em>.</>
-      : <>The <em style={{ fontStyle: 'italic', fontWeight: 300 }}>library</em>.</>
+      : view === 'species'
+      ? <>The <em style={{ fontStyle: 'italic', fontWeight: 300 }}>library</em>.</>
+      : view === 'tigers' && selectedTiger
+      ? <><em style={{ fontStyle: 'italic', fontWeight: 300 }}>{selectedTiger.name}</em>.</>
+      : <>The <em style={{ fontStyle: 'italic', fontWeight: 300 }}>tigers</em>.</>
 
   const subhead =
     view === 'desk' ? '◆ The Head Naturalist\'s Desk'
     : view === 'sighting' && selectedSighting ? '◆ A record under review'
     : view === 'sighting' ? '◆ Sightings · in review'
     : view === 'species' && selectedSpecies ? '◆ Species folio'
-    : '◆ The library · admin'
+    : view === 'species' ? '◆ The library · admin'
+    : view === 'tigers' && selectedTiger ? '◆ Tiger · individual record'
+    : '◆ Named individuals · the tigers'
 
   return (
     <div style={{

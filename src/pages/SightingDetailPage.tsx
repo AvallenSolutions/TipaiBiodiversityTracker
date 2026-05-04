@@ -7,6 +7,7 @@ import { getMediaUrl } from '@/lib/storage'
 import { formatCoordinates } from '@/hooks/useGeolocation'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono, MonoIcon, ConfidenceDial } from '@/components/logger/shared'
+import { PARK_LABEL } from '@/types'
 import type { Sighting } from '@/types'
 
 export default function SightingDetailPage() {
@@ -24,7 +25,7 @@ export default function SightingDetailPage() {
     setLoading(true)
     try {
       const { data, error: err } = await (supabase.from('sightings') as any)
-        .select('*, media:sighting_media(*), profile:profiles!sightings_user_id_fkey(*)')
+        .select('*, media:sighting_media(*), profile:profiles!sightings_user_id_fkey(*), tiger:tiger_individuals(*)')
         .eq('id', id)
         .single()
       if (err) throw err
@@ -134,10 +135,24 @@ export default function SightingDetailPage() {
         <div>
           <Mono size={9} letter={0.22} color={DS.inkSoft}>Where</Mono>
           <p style={{ fontFamily: DS.mono, fontSize: 11, letterSpacing: '0.05em', margin: '4px 0 0', color: DS.ink }}>
-            {formatCoordinates(sighting.latitude, sighting.longitude)}
+            {sighting.latitude != null && sighting.longitude != null
+              ? formatCoordinates(sighting.latitude, sighting.longitude)
+              : sighting.park
+                ? `${PARK_LABEL[sighting.park]} (no GPS)`
+                : '—'}
           </p>
         </div>
       </div>
+
+      {/* Tiger individual */}
+      {sighting.tiger?.name && (
+        <div style={{ padding: '12px 0', borderBottom: `1px solid ${DS.ink}`, marginBottom: 24 }}>
+          <Mono size={9} letter={0.22} color={DS.ochre}>Individual tiger</Mono>
+          <p style={{ fontFamily: DS.serif, fontSize: 22, fontWeight: 300, margin: '4px 0 0', color: DS.ink, letterSpacing: '-0.01em' }}>
+            {sighting.tiger.name}
+          </p>
+        </div>
+      )}
 
       {/* Category & count */}
       {sighting.individual_count && (
