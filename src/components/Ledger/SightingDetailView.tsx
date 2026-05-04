@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext'
 import { PARK_LABEL } from '../../types'
 import type { Sighting, SightingCategory } from '../../types'
 import { Mono, PhotoPlaceholder } from './shared'
+import { TigerInlineEditor } from '../TigerInlineEditor'
 
 function confidenceWord(conf: number): string {
   if (conf >= 0.8) return 'certain'
@@ -237,7 +238,6 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 ['GPS ACCURACY', sighting.location_accuracy ? `±${Math.round(sighting.location_accuracy)}m` : '—'],
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
                 ['OBSERVER', sighting.profile?.display_name || sighting.profile?.email || '—'],
-                ...(sighting.tiger?.name ? [['TIGER', sighting.tiger.name]] as [string, string][] : []),
                 ...(sighting.park ? [['PARK', PARK_LABEL[sighting.park]]] as [string, string][] : []),
               ] as [string, string | number][]).map(([k, v]) => (
                 <div key={k} style={{ padding: '8px 0', borderBottom: `0.5px dashed ${DS.inkHair}` }}>
@@ -259,6 +259,11 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 }}>"{sighting.notes}"</div>
               </div>
             )}
+
+            {/* Tiger naming — owner / naturalist / admin can backfill the
+                named individual on a tiger sighting from this view, so a
+                record logged before naming was supported still gets a name. */}
+            <TigerInlineEditor sighting={sighting} onUpdated={() => onChanged?.()} />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '18px 0' }}>
               <div style={{ textAlign: 'right' }}>

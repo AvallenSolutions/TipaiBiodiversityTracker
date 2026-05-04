@@ -7,6 +7,7 @@ import { getMediaUrl } from '@/lib/storage'
 import { formatCoordinates } from '@/hooks/useGeolocation'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono, MonoIcon, ConfidenceDial } from '@/components/logger/shared'
+import { TigerInlineEditor } from '@/components/TigerInlineEditor'
 import { PARK_LABEL } from '@/types'
 import type { Sighting } from '@/types'
 
@@ -144,15 +145,16 @@ export default function SightingDetailPage() {
         </div>
       </div>
 
-      {/* Tiger individual */}
-      {sighting.tiger?.name && (
-        <div style={{ padding: '12px 0', borderBottom: `1px solid ${DS.ink}`, marginBottom: 24 }}>
-          <Mono size={9} letter={0.22} color={DS.ochre}>Individual tiger</Mono>
-          <p style={{ fontFamily: DS.serif, fontSize: 22, fontWeight: 300, margin: '4px 0 0', color: DS.ink, letterSpacing: '-0.01em' }}>
-            {sighting.tiger.name}
-          </p>
-        </div>
-      )}
+      {/* Tiger individual — editable for owner / naturalist / admin so a
+          tiger sighting logged before the naming feature shipped, or one
+          where the observer wasn't sure at the time, can have its name
+          backfilled later. */}
+      <TigerInlineEditor
+        sighting={sighting}
+        onUpdated={({ tiger_id, tiger }) => {
+          setSighting(prev => prev ? { ...prev, tiger_id, tiger: tiger ?? undefined } : prev)
+        }}
+      />
 
       {/* Category & count */}
       {sighting.individual_count && (
