@@ -7,6 +7,20 @@ export type SightingCategory = 'mammal' | 'bird' | 'reptile' | 'amphibian' | 'in
 export type VerificationStatus = 'unverified' | 'ai_suggested' | 'verified' | 'rejected'
 export type ExportStatus = 'not_exported' | 'pending' | 'exported' | 'excluded' | 'failed'
 export type MediaType = 'photo' | 'video' | 'audio'
+export type Park = 'tipai' | 'tipeshwar'
+
+export const PARK_LABEL: Record<Park, string> = {
+  tipai: 'Tipai',
+  tipeshwar: 'Tipeshwar',
+}
+
+export interface TigerIndividual {
+  id: string
+  name: string
+  notes: string | null
+  created_at: string
+  created_by: string | null
+}
 
 export interface Profile {
   id: string
@@ -53,11 +67,18 @@ export interface Sighting {
   inaturalist_status: ExportStatus
   ebird_status: ExportStatus
   individual_count: number | null
+  // Optional FK to a named tiger when the observer can identify the individual.
+  // Null for non-tiger sightings or unidentified tigers.
+  tiger_id: string | null
+  // Park name for sightings logged without GPS — phones aren't allowed in
+  // some reserves so the observer picks the park instead of using a fix.
+  park: Park | null
   created_at: string
   updated_at: string
   // Joined data
   media?: SightingMedia[]
   profile?: Profile
+  tiger?: TigerIndividual
 }
 
 export interface SightingMedia {
@@ -111,6 +132,8 @@ export interface PendingSighting {
   ai_suggestions: AISuggestion[] | null
   ai_confidence: number | null
   individual_count: number | null
+  tiger_id: string | null
+  park: Park | null
   media: { blob: Blob; type: MediaType; mime_type: string }[]
   created_at: string
   // True when the sighting was logged offline and the user has not yet

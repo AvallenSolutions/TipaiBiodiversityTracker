@@ -12,7 +12,8 @@ import { SightingDetailView } from '@/components/Ledger/SightingDetailView'
 import { SightingsListView } from '@/components/Ledger/SightingsListView'
 import { SpeciesDetailView } from '@/components/Ledger/SpeciesDetailView'
 import { SpeciesLibraryView } from '@/components/Ledger/SpeciesLibraryView'
-import type { Sighting, Species } from '@/types'
+import { TigersView } from '@/components/Ledger/TigersView'
+import type { Sighting, Species, TigerIndividual } from '@/types'
 
 function deriveInitials(name?: string | null, email?: string | null): string {
   if (name) {
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   // button. Calls coming in from Desk or SightingDetailView only have a
   // name; the detail view falls back to name-based rendering there.
   const [selectedSpeciesEntry, setSelectedSpeciesEntry] = useState<Species | null>(null)
+  const [selectedTiger, setSelectedTiger] = useState<TigerIndividual | null>(null)
   const { open: openEditor } = useSpeciesEditor()
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export default function DashboardPage() {
         onNav={setView}
         selectedSighting={selectedSighting}
         selectedSpecies={selectedSpecies}
+        selectedTiger={selectedTiger}
         onSignOut={handleSignOut}
         userInitials={userInitials}
       />
@@ -178,6 +181,16 @@ export default function DashboardPage() {
 
       {view === 'species' && !selectedSpecies && (
         <SpeciesLibraryView onOpen={openSpeciesEntry} />
+      )}
+
+      {view === 'tigers' && (
+        <TigersView
+          sightings={sightings}
+          onOpenSighting={openSighting}
+          selectedTiger={selectedTiger}
+          onSelectTiger={setSelectedTiger}
+          onBack={() => { setSelectedTiger(null); setView('desk') }}
+        />
       )}
     </div>
   )

@@ -5,13 +5,15 @@ import { useAuth } from '@/context/AuthContext'
 import { useGeolocation, formatCoordinates } from '@/hooks/useGeolocation'
 import { isStandalone } from '@/hooks/useInstallPrompt'
 import { useSpecies } from '@/hooks/useSpecies'
+import { useTigerIndividuals, isTigerSighting } from '@/hooks/useTigerIndividuals'
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
 import { savePendingSighting } from '@/lib/offline'
 import { identifySpecies, isGeminiAvailable } from '@/lib/gemini'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Blank, ConfidenceDial, PickerSheet, Mono, MonoIcon } from '@/components/logger/shared'
-import type { SightingCategory, AISuggestion, MediaType } from '@/types'
+import { PARK_LABEL } from '@/types'
+import type { SightingCategory, AISuggestion, MediaType, Park } from '@/types'
 
 interface CapturedMedia {
   blob: Blob
@@ -47,6 +49,7 @@ export default function NewSightingPage() {
     }
   }, [])
   const { species, fetchSpecies } = useSpecies()
+  const { tigers, createTiger } = useTigerIndividuals()
 
   const [step, setStep] = useState<Step>('camera')
   const [category, setCategory] = useState<SightingCategory | null>(null)
@@ -76,6 +79,12 @@ export default function NewSightingPage() {
   const [confidence, setConfidence] = useState('Likely')
   const [notes, setNotes] = useState('')
   const [picker, setPicker] = useState<string | null>(null)
+
+  // Tiger individual + park (for sightings without GPS)
+  const [tigerId, setTigerId] = useState<string | null>(null)
+  const [newTigerName, setNewTigerName] = useState('')
+  const [addingNewTiger, setAddingNewTiger] = useState(false)
+  const [park, setPark] = useState<Park | null>(null)
 
   // Submission
   const [submitting, setSubmitting] = useState(false)
@@ -328,6 +337,28 @@ export default function NewSightingPage() {
     const lng = location?.longitude ?? null
     const wasOffline = !navigator.onLine
 
+    // Resolve the tiger individual: if the user typed a new name, register
+    // it before inserting the sighting so we can link by FK. Existing-tiger
+    // selections (tigerId already set) just pass through. Skipped offline —
+    // the tiger registry isn't cached locally so we can't write to it; the
+    // user falls back to the regular sighting flow without a link.
+    let resolvedTigerId: string | null = tigerId
+    const speciesIsTiger = isTigerSighting({
+      category, common_name: selectedSpecies?.common_name, scientific_name: selectedSpecies?.scientific_name,
+    })
+    if (!wasOffline && speciesIsTiger && !resolvedTigerId && newTigerName.trim()) {
+      try {
+        const tiger = await createTiger(newTigerName.trim(), null, user.id)
+        resolvedTigerId = tiger.id
+      } catch (err: any) {
+        setSubmitError(`Couldn't register tiger "${newTigerName.trim()}": ${err?.message || err}`)
+        setSubmitting(false)
+        return
+      }
+    }
+    // Park is only relevant when there's no GPS fix.
+    const resolvedPark: Park | null = (lat == null || lng == null) ? park : null
+
     try {
       if (navigator.onLine) {
         const mediaRecords: { path: string; type: MediaType; mime: string }[] = []
@@ -353,6 +384,8 @@ export default function NewSightingPage() {
           ai_confidence: selectedSpecies?.confidence ?? null,
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
           individual_count: count,
+          tiger_id: resolvedTigerId,
+          park: resolvedPark,
         })
         if (sightingError) throw sightingError
 
@@ -390,6 +423,12 @@ export default function NewSightingPage() {
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
           ai_confidence: selectedSpecies?.confidence ?? null,
           individual_count: count,
+          // tiger_id stays null offline (registry not cached), but the user
+          // can still type a name in newTigerName which will be attempted on
+          // sync. We persist null + park here; the sync function in offline.ts
+          // is responsible for registering the named tiger when online.
+          tiger_id: null,
+          park: resolvedPark,
           media: capturedMedia.map(m => ({
             blob: m.blob,
             type: m.type,
@@ -1054,6 +1093,105 @@ export default function NewSightingPage() {
               }}
             />
           </div>
+
+          {/* Tiger individual picker — only when the species reads as a
+              tiger. Existing tigers from the registry plus a "Name a new
+              one" text input, so the database grows naturally as users
+              identify individuals. */}
+          {isTigerSighting({
+            category,
+            common_name: selectedSpecies?.common_name,
+            scientific_name: selectedSpecies?.scientific_name,
+          }) && (
+            <div style={{
+              margin: '0 22px', padding: '16px 0 4px',
+              borderTop: `0.5px solid ${DS.inkHair}`,
+            }}>
+              <Mono size={9} letter={0.2} color={DS.ochre} style={{ marginBottom: 8 }}>
+                ◆ Which tiger?
+              </Mono>
+              <select
+                value={addingNewTiger ? '__new__' : (tigerId ?? '')}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === '__new__') {
+                    setAddingNewTiger(true)
+                    setTigerId(null)
+                  } else if (v === '') {
+                    setAddingNewTiger(false)
+                    setTigerId(null)
+                    setNewTigerName('')
+                  } else {
+                    setAddingNewTiger(false)
+                    setTigerId(v)
+                    setNewTigerName('')
+                  }
+                }}
+                style={{
+                  width: '100%', padding: '10px 8px',
+                  border: `0.5px solid ${DS.inkFaint}`, background: 'transparent',
+                  fontFamily: DS.serif, fontSize: 16, color: DS.ink, outline: 'none',
+                  marginBottom: 10,
+                }}
+              >
+                <option value="">— Unknown / unnamed —</option>
+                {tigers.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+                <option value="__new__">＋ Name a new tiger…</option>
+              </select>
+              {addingNewTiger && (
+                <input
+                  type="text"
+                  value={newTigerName}
+                  onChange={(e) => setNewTigerName(e.target.value)}
+                  placeholder="Name this tiger (e.g. Maya)"
+                  autoFocus
+                  style={{
+                    width: '100%', padding: '8px 0',
+                    border: 'none', borderBottom: `0.5px solid ${DS.ink}`,
+                    background: 'transparent',
+                    fontFamily: DS.serif, fontSize: 16, color: DS.ink, outline: 'none',
+                  }}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Park picker — only when no GPS fix. Phones aren't allowed in
+              some reserves so the observer picks the park instead. */}
+          {!location && (
+            <div style={{
+              margin: '0 22px', padding: '16px 0 8px',
+              borderTop: `0.5px solid ${DS.inkHair}`,
+            }}>
+              <Mono size={9} letter={0.2} color={DS.ochre} style={{ marginBottom: 8 }}>
+                ◆ Which park? (no GPS recorded)
+              </Mono>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['tipai', 'tipeshwar'] as Park[]).map(p => {
+                  const active = park === p
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setPark(active ? null : p)}
+                      style={{
+                        flex: 1, padding: '12px 0',
+                        background: active ? DS.ink : 'transparent',
+                        color: active ? DS.ivory : DS.ink,
+                        border: `0.5px solid ${active ? DS.ink : DS.inkFaint}`,
+                        cursor: 'pointer',
+                        fontFamily: DS.serif, fontSize: 16, fontWeight: 300,
+                        letterSpacing: '-0.01em',
+                      }}
+                    >
+                      {PARK_LABEL[p]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div style={{ height: 120 }} />
         </div>
