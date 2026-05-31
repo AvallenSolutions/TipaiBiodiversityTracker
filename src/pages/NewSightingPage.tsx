@@ -9,6 +9,7 @@ import { useTigerIndividuals, isTigerSighting } from '@/hooks/useTigerIndividual
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
 import { savePendingSighting } from '@/lib/offline'
+import { ensureProfile } from '@/lib/ensureProfile'
 import { identifySpecies, isGeminiAvailable } from '@/lib/gemini'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Blank, ConfidenceDial, PickerSheet, Mono, MonoIcon } from '@/components/logger/shared'
@@ -361,6 +362,7 @@ export default function NewSightingPage() {
 
     try {
       if (navigator.onLine) {
+        await ensureProfile(user)
         const mediaRecords: { path: string; type: MediaType; mime: string }[] = []
         for (let i = 0; i < capturedMedia.length; i++) {
           const m = capturedMedia[i]!

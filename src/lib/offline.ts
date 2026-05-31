@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase, type DBSchema } from 'idb'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabase'
 import { uploadMedia } from './storage'
+import { ensureProfile } from './ensureProfile'
 import type { PendingSighting, Species } from '@/types'
 
 interface TipaiDB extends DBSchema {
@@ -130,6 +131,9 @@ export async function syncPendingSightings(userId: string): Promise<SyncResult> 
     skipped: own.length - ready.length,
     failed: [],
   }
+
+  const { data: { user: authUser } } = await supabase.auth.getUser()
+  if (authUser) await ensureProfile(authUser)
 
   for (const p of ready) {
     try {
