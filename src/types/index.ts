@@ -73,6 +73,16 @@ export interface Sighting {
   // Park name for sightings logged without GPS — phones aren't allowed in
   // some reserves so the observer picks the park instead of using a fix.
   park: Park | null
+  // Field notes from the logging screen (null on records made before
+  // they were stored, or when the observer left them blank).
+  sex_age?: string | null
+  behaviour?: string | null
+  habitat?: string | null
+  weather?: string | null
+  observer_confidence?: string | null
+  // Stamped by a database trigger when the record is verified or rejected.
+  reviewed_by?: string | null
+  reviewed_at?: string | null
   created_at: string
   updated_at: string
   // Joined data
@@ -143,6 +153,11 @@ export interface PendingSighting {
   individual_count: number | null
   tiger_id: string | null
   park: Park | null
+  sex_age?: string | null
+  behaviour?: string | null
+  habitat?: string | null
+  weather?: string | null
+  observer_confidence?: string | null
   media: { blob: Blob; type: MediaType; mime_type: string }[]
   created_at: string
   // True when the sighting was logged offline and the user has not yet

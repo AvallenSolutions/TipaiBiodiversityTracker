@@ -62,3 +62,12 @@ Built all three phases in one branch.
 Done 2026-10-06: migration applied (+ search_path fix on ai_norm / ai_same_species), GEMINI_API_KEY and SITE_URL secrets set, identify-species deployed and smoke-tested (401 without sign-in, CORS ok). Plates are read from the caller's own site when it is tipaitracker.netlify.app or one of its deploy previews.
 
 Deploy order: migration -> secrets (GEMINI_API_KEY, SITE_URL) -> deploy function -> merge PR -> admin "Teach" -> admin "Test" -> remove VITE_GEMINI_API_KEY from Netlify -> delete the old (exposed) Gemini key.
+
+# Naturalist tools (branch claude/naturalist-review, 2026-10-06)
+
+- [x] Fix 1: save sex & age, behaviour, habitat, weather, observer confidence (were collected but never stored). Fields start blank. Saved online, offline and on sync; shown on the record; in the CSV export; habitat sent to the AI on re-identify.
+- [x] Fix 2: field-guide plate next to each AI answer (new sighting, pending, review list) with a full-screen photo vs plate compare.
+- [x] Fix 7: Review tab in the Ledger for naturalists/admins. Unchecked records sorted by importance (venomous, unnamed, first record for Tipai, differs from AI, AI unsure, not in library). Confirm / use another AI answer / reject in one tap; each decision teaches the AI. Feed banner links to it.
+- [x] Naturalist/admin records are saved as verified; everyone else's go to review. reviewed_by / reviewed_at stamped by a trigger.
+- [x] Migration applied (dry run first). Function redeployed with habitat context.
+- [ ] Phone check of the new screens.

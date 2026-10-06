@@ -21,6 +21,8 @@ export interface IdentifyContext {
   longitude?: number | null
   park?: Park | null
   sighted_at?: string | null
+  // Habitat the observer noted (only known when re-identifying a saved record).
+  habitat?: string | null
   // Leave this sighting out of the photo memory (used by the accuracy test).
   exclude_sighting_id?: string | null
 }
@@ -58,6 +60,7 @@ export async function identifySpecies(
     longitude: context.longitude ?? null,
     park: context.park ?? null,
     sighted_at: context.sighted_at ?? null,
+    habitat: context.habitat ?? null,
     exclude_sighting_id: context.exclude_sighting_id ?? null,
   }, 130_000)
 

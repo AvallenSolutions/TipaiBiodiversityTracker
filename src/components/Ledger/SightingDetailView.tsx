@@ -249,6 +249,14 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
                 ['OBSERVER', sighting.profile?.display_name || sighting.profile?.email || '—'],
                 ...(sighting.park ? [['PARK', PARK_LABEL[sighting.park]]] as [string, string][] : []),
+                ...([
+                  ['SEX & AGE', sighting.sex_age],
+                  ['BEHAVIOUR', sighting.behaviour],
+                  ['HABITAT', sighting.habitat],
+                  ['WEATHER', sighting.weather],
+                  ['OBSERVER CONFIDENCE', sighting.observer_confidence],
+                  ['REVIEWED', sighting.reviewed_at ? format(new Date(sighting.reviewed_at), 'd MMM · HH:mm') : null],
+                ].filter(([, v]) => !!v) as [string, string][]),
               ] as [string, string | number][]).map(([k, v]) => (
                 <div key={k} style={{ padding: '8px 0', borderBottom: `0.5px dashed ${DS.inkHair}` }}>
                   <Mono size={8} letter={0.22} color={DS.inkSoft}>{k}</Mono>

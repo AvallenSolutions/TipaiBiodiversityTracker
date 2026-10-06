@@ -13,6 +13,8 @@ import { SightingsListView } from '@/components/Ledger/SightingsListView'
 import { SpeciesDetailView } from '@/components/Ledger/SpeciesDetailView'
 import { SpeciesLibraryView } from '@/components/Ledger/SpeciesLibraryView'
 import { TigersView } from '@/components/Ledger/TigersView'
+import { ReviewView, needsReview } from '@/components/Ledger/ReviewView'
+import { canTeachAi } from '@/lib/gemini'
 import type { Sighting, Species, TigerIndividual } from '@/types'
 
 function deriveInitials(name?: string | null, email?: string | null): string {
@@ -31,7 +33,9 @@ export default function DashboardPage() {
 
   const [pendingCount, setPendingCount] = useState(0)
   const [isOnline, setIsOnline] = useState(navigator.onLine)
-  const [view, setView] = useState<LedgerView>('desk')
+  // ?view=review deep-links straight to the review list (used by the feed).
+  const [view, setView] = useState<LedgerView>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'review' ? 'review' : 'desk')
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null)
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null)
   // When the user opens a species *from the Library admin* we have the
@@ -97,6 +101,8 @@ export default function DashboardPage() {
   }
 
   const userInitials = deriveInitials(profile?.display_name, user?.email)
+  const isNaturalist = canTeachAi(profile?.role)
+  const reviewCount = isNaturalist ? sightings.filter(needsReview).length : undefined
 
   if (loading) {
     return (
@@ -125,6 +131,7 @@ export default function DashboardPage() {
         selectedTiger={selectedTiger}
         onSignOut={handleSignOut}
         userInitials={userInitials}
+        reviewCount={reviewCount}
       />
 
       {(pendingCount > 0 || !isOnline) && (
@@ -143,6 +150,10 @@ export default function DashboardPage() {
 
       {view === 'desk' && (
         <Desk sightings={sightings} onOpenSighting={openSighting} onOpenSpecies={openSpecies} />
+      )}
+
+      {view === 'review' && isNaturalist && (
+        <ReviewView sightings={sightings} onOpenSighting={openSighting} onChanged={fetchSightings} />
       )}
 
       {view === 'sighting' && selectedSighting && (
