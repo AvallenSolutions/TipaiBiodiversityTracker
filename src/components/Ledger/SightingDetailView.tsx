@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { DS, normalizeConf } from '../../lib/ledger-design'
 import { supabase } from '../../lib/supabase'
 import { getMediaUrl } from '../../lib/storage'
+import { learnFromSightingRecord } from '../../lib/gemini'
 import { useSpecies } from '../../hooks/useSpecies'
 import { useSightings } from '../../hooks/useSightings'
 import { useAuth } from '../../context/AuthContext'
@@ -54,11 +55,20 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
 
   const { verifySighting, updateSighting, deleteSighting } = useSightings()
 
+  // Every naturalist/admin confirmation or correction teaches the AI. The
+  // server reads the (now saved) species from the database. Background only.
+  function teachAi() {
+    if (!canManage) return
+    learnFromSightingRecord(sighting)
+      .catch(err => console.warn('[learn] could not teach AI from sighting', err))
+  }
+
   async function handleVerify() {
     setActionError(null)
     setVerifying(true)
     try {
       await verifySighting(sighting.id)
+      teachAi()
       onChanged?.()
     } catch (err: any) {
       setActionError(err?.message || 'Failed to verify sighting')
@@ -239,6 +249,14 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
                 ['LOGGED', format(createdAt, 'd MMM · HH:mm')],
                 ['OBSERVER', sighting.profile?.display_name || sighting.profile?.email || '—'],
                 ...(sighting.park ? [['PARK', PARK_LABEL[sighting.park]]] as [string, string][] : []),
+                ...([
+                  ['SEX & AGE', sighting.sex_age],
+                  ['BEHAVIOUR', sighting.behaviour],
+                  ['HABITAT', sighting.habitat],
+                  ['WEATHER', sighting.weather],
+                  ['OBSERVER CONFIDENCE', sighting.observer_confidence],
+                  ['REVIEWED', sighting.reviewed_at ? format(new Date(sighting.reviewed_at), 'd MMM · HH:mm') : null],
+                ].filter(([, v]) => !!v) as [string, string][]),
               ] as [string, string | number][]).map(([k, v]) => (
                 <div key={k} style={{ padding: '8px 0', borderBottom: `0.5px dashed ${DS.inkHair}` }}>
                   <Mono size={8} letter={0.22} color={DS.inkSoft}>{k}</Mono>
@@ -346,6 +364,7 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
           onError={setActionError}
           onPromoted={() => {
             setShowPromote(false)
+            teachAi()
             onChanged?.()
           }}
         />
@@ -356,9 +375,14 @@ export function SightingDetailView({ sighting, onBack, onOpenSpecies, onChanged 
           sighting={sighting}
           onClose={() => setShowEdit(false)}
           onError={setActionError}
-          onSaved={async (updates) => {
+          onSaved={async (updates, tip) => {
             try {
               await updateSighting(sighting.id, updates)
+              if (tip) {
+                const { error: tipError } = await (supabase.from('species_lookalike_tips') as any).insert(tip)
+                if (tipError) console.warn('[learn] could not save look-alike tip', tipError)
+              }
+              teachAi()
               setShowEdit(false)
               onChanged?.()
             } catch (err: any) {
@@ -528,6 +552,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+interface LookalikeTip { species_a: string; species_b: string; tip: string }
+
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z]/g, '')
+}
+
 const SIGHTING_CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace']
 const VERIFICATION_OPTIONS: { value: Sighting['verification_status']; label: string }[] = [
   { value: 'unverified',    label: 'Unverified' },
@@ -541,10 +571,16 @@ function EditSightingSheet({
 }: {
   sighting: Sighting
   onClose: () => void
-  onSaved: (updates: Partial<Sighting>) => void | Promise<void>
+  onSaved: (updates: Partial<Sighting>, tip: LookalikeTip | null) => void | Promise<void>
   onError: (msg: string) => void
 }) {
   const [common, setCommon] = useState(sighting.common_name ?? '')
+  // When a naturalist corrects the AI, invite a short tip on telling the
+  // two species apart. Tips are fed to the AI whenever either species is a
+  // candidate.
+  const aiTop = sighting.ai_suggestions?.[0]?.common_name ?? null
+  const correctsAi = !!aiTop && !!common.trim() && normName(aiTop) !== normName(common)
+  const [tip, setTip] = useState('')
   const [scientific, setScientific] = useState(sighting.scientific_name ?? '')
   const [category, setCategory] = useState<SightingCategory>(sighting.category)
   const [linkedSpeciesId, setLinkedSpeciesId] = useState<string | null>(sighting.species_id)
@@ -601,7 +637,9 @@ function EditSightingSheet({
         individual_count: parsedCount,
         notes: notes.trim() || null,
         verification_status: status,
-      })
+      }, correctsAi && tip.trim().length >= 3
+        ? { species_a: aiTop!, species_b: common.trim(), tip: tip.trim() }
+        : null)
     } catch (err: any) {
       onError(err?.message || 'Failed to save changes')
     } finally {
@@ -755,6 +793,17 @@ function EditSightingSheet({
               readOnly={isLinked}
             />
           </Field>
+          {correctsAi && (
+            <Field label={`Teach the AI (optional): how do you tell ${common.trim()} from ${aiTop}?`}>
+              <textarea
+                value={tip}
+                onChange={(e) => setTip(e.target.value)}
+                maxLength={500}
+                placeholder="e.g. Krait: thin white bands in pairs, glossy scales. Wolf snake: wider bands that fade towards the head."
+                style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+              />
+            </Field>
+          )}
           <Field label="Category">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SIGHTING_CATEGORIES.map(c => (

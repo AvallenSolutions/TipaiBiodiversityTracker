@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import type { Profile, UserRole } from '@/types'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
+import { AiAccuracyPanel } from '@/components/AiAccuracyPanel'
 
 const ROLES: UserRole[] = ['guest', 'staff', 'naturalist', 'admin']
 
@@ -215,6 +216,8 @@ export default function AdminPage() {
           })}
         </div>
       )}
+
+      <AiAccuracyPanel />
 
       {/* Delete confirmation overlay */}
       {deleteTarget && (

@@ -73,6 +73,16 @@ export interface Sighting {
   // Park name for sightings logged without GPS — phones aren't allowed in
   // some reserves so the observer picks the park instead of using a fix.
   park: Park | null
+  // Field notes from the logging screen (null on records made before
+  // they were stored, or when the observer left them blank).
+  sex_age?: string | null
+  behaviour?: string | null
+  habitat?: string | null
+  weather?: string | null
+  observer_confidence?: string | null
+  // Stamped by a database trigger when the record is verified or rejected.
+  reviewed_by?: string | null
+  reviewed_at?: string | null
   created_at: string
   updated_at: string
   // Joined data
@@ -109,6 +119,15 @@ export interface AISuggestion {
   confidence: number
   description: string | null
   category?: SightingCategory
+  // Added by the v2 identifier (identify-species edge function). Older
+  // stored suggestions do not have these fields.
+  species_id?: string | null
+  in_library?: boolean
+  field_marks?: string[]
+  missing_marks?: string[]
+  venomous?: boolean
+  warning?: string | null
+  engine?: string
 }
 
 export interface LocationData {
@@ -137,6 +156,11 @@ export interface PendingSighting {
   // offline, so sync registers (or looks up) this name and sets tiger_id.
   tiger_name?: string | null
   park: Park | null
+  sex_age?: string | null
+  behaviour?: string | null
+  habitat?: string | null
+  weather?: string | null
+  observer_confidence?: string | null
   media: { blob: Blob; type: MediaType; mime_type: string }[]
   created_at: string
   // True when the sighting was logged offline and the user has not yet
