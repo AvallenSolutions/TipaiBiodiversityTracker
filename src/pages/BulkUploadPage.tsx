@@ -204,7 +204,7 @@ export default function BulkUploadPage() {
         longitude: lng,
         location_accuracy: null,
         sighted_at: sightedAt,
-        verification_status: 'unverified',
+        verification_status: canTeachAi(profile?.role) ? 'verified' : 'unverified',
         ai_confidence: item.aiConfidence,
         ai_suggestions: item.aiSuggestions.length ? item.aiSuggestions : null,
         individual_count: 1,

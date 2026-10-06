@@ -156,6 +156,11 @@ export async function syncPendingSightings(userId: string): Promise<SyncResult> 
         ai_confidence: p.ai_confidence,
         ai_suggestions: p.ai_suggestions,
         individual_count: p.individual_count,
+        sex_age: p.sex_age ?? null,
+        behaviour: p.behaviour ?? null,
+        habitat: p.habitat ?? null,
+        weather: p.weather ?? null,
+        observer_confidence: p.observer_confidence ?? null,
       })
       if (sErr) throw sErr
 

@@ -4,7 +4,8 @@ export function exportToCSV(sightings: Sighting[]): void {
   const headers = [
     'id', 'category', 'common_name', 'scientific_name', 'latitude', 'longitude',
     'sighted_at', 'verification_status', 'ai_confidence', 'individual_count',
-    'notes', 'created_at',
+    'sex_age', 'behaviour', 'habitat', 'weather', 'observer_confidence',
+    'notes', 'reviewed_at', 'created_at',
   ]
   const rows = sightings.map(s =>
     headers.map(h => {

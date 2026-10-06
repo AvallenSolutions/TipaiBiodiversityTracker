@@ -9,6 +9,7 @@ import {
   syncPendingSightings,
 } from '@/lib/offline'
 import { identifySpecies } from '@/lib/gemini'
+import { PlateCompare, PlateThumb, plateTargetFor, type PlateTarget } from '@/components/sighting/PlateCompare'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono, MonoIcon, ConfidenceDial } from '@/components/logger/shared'
 import { formatCoordinates } from '@/hooks/useGeolocation'
@@ -357,6 +358,7 @@ function FinalizeSheet({
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>(pending.ai_suggestions ?? [])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [comparePlate, setComparePlate] = useState<PlateTarget | null>(null)
 
   const [commonName, setCommonName] = useState<string>(pending.common_name ?? '')
   const [scientificName, setScientificName] = useState<string>(pending.scientific_name ?? '')
@@ -387,6 +389,7 @@ function FinalizeSheet({
         longitude: pending.longitude,
         park: pending.park,
         sighted_at: pending.sighted_at,
+        habitat: pending.habitat,
       })
       setAiSuggestions(suggestions)
     } catch (err: any) {
@@ -547,15 +550,19 @@ function FinalizeSheet({
               {aiSuggestions.map((s, i) => {
                 const pct = Math.round(normalizeConf(s.confidence) * 100)
                 const picked = commonName === s.common_name && linkedSpeciesId === (s.species_id ?? null)
+                const plate = plateTargetFor(s.common_name, s.scientific_name)
                 return (
+                  <div key={`${s.common_name}-${i}`} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    borderBottom: `0.5px solid ${DS.inkHair}`,
+                  }}>
                   <button
-                    key={`${s.common_name}-${i}`}
                     onClick={() => pickSuggestion(s)}
                     style={{
+                      flex: 1, minWidth: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       gap: 10, padding: '10px 0', textAlign: 'left',
                       background: 'transparent', border: 'none',
-                      borderBottom: `0.5px solid ${DS.inkHair}`,
                       cursor: 'pointer',
                     }}
                   >
@@ -578,11 +585,17 @@ function FinalizeSheet({
                       <Mono size={9} color={DS.inkSoft} letter={0.18}>{pct}%</Mono>
                     )}
                   </button>
+                  {plate && <PlateThumb target={plate} size={48} onOpen={setComparePlate} />}
+                  </div>
                 )
               })}
             </div>
           )}
         </div>
+
+        {comparePlate && (
+          <PlateCompare photoUrl={url} target={comparePlate} onClose={() => setComparePlate(null)} />
+        )}
 
         {/* Library section */}
         <div style={{ paddingTop: 14 }}>

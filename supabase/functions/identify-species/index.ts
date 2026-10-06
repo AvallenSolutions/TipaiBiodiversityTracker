@@ -314,6 +314,7 @@ function buildContext(input: IdentifyInput): string {
     const month = ist.getUTCMonth() + 1
     lines.push(`Date: ${ist.toISOString().slice(0, 10)}, local time ${String(hour).padStart(2, '0')}:00 (${part}). Season: ${seasonFor(month)}.`)
   }
+  if (input.habitat) lines.push(`Habitat noted by the observer: ${String(input.habitat).slice(0, 60)}.`)
   if (input.category) lines.push(`The observer classed this as a ${input.category} sighting.`)
   return lines.join('\n')
 }
@@ -327,6 +328,7 @@ interface IdentifyInput {
   longitude?: number | null
   park?: string | null
   sighted_at?: string | null
+  habitat?: string | null
   exclude_sighting_id?: string | null
 }
 

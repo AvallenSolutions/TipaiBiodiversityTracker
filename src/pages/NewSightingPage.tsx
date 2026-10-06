@@ -12,6 +12,7 @@ import { savePendingSighting } from '@/lib/offline'
 import { identifySpecies, isAiAvailable, learnFromSighting, canTeachAi } from '@/lib/gemini'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Blank, ConfidenceDial, PickerSheet, Mono, MonoIcon } from '@/components/logger/shared'
+import { PlateCompare, PlateThumb, plateTargetFor, type PlateTarget } from '@/components/sighting/PlateCompare'
 import { PARK_LABEL } from '@/types'
 import type { SightingCategory, AISuggestion, MediaType, Park } from '@/types'
 
@@ -67,16 +68,19 @@ export default function NewSightingPage() {
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion[]>([])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [comparePlate, setComparePlate] = useState<PlateTarget | null>(null)
 
   // Entry fields
   const [selectedSpecies, setSelectedSpecies] = useState<AISuggestion | null>(null)
   const [linkedSpeciesId, setLinkedSpeciesId] = useState<string | null>(null)
   const [count, setCount] = useState(1)
-  const [sexAge, setSexAge] = useState('Adult male')
-  const [behaviour, setBehaviour] = useState('Resting')
-  const [habitat, setHabitat] = useState('Sal forest')
-  const [weather, setWeather] = useState('Overcast')
-  const [confidence, setConfidence] = useState('Likely')
+  // Field notes start blank: a pre-filled guess ("Adult male", "Resting")
+  // would be saved as if the observer had chosen it.
+  const [sexAge, setSexAge] = useState('')
+  const [behaviour, setBehaviour] = useState('')
+  const [habitat, setHabitat] = useState('')
+  const [weather, setWeather] = useState('')
+  const [confidence, setConfidence] = useState('')
   const [notes, setNotes] = useState('')
   const [picker, setPicker] = useState<string | null>(null)
 
@@ -372,6 +376,13 @@ export default function NewSightingPage() {
     }
     // Park is only relevant when there's no GPS fix.
     const resolvedPark: Park | null = (lat == null || lng == null) ? park : null
+    const fieldNotes = {
+      sex_age: sexAge || null,
+      behaviour: behaviour || null,
+      habitat: habitat || null,
+      weather: weather || null,
+      observer_confidence: confidence || null,
+    }
 
     try {
       if (navigator.onLine) {
@@ -394,12 +405,15 @@ export default function NewSightingPage() {
           longitude: lng,
           location_accuracy: location?.accuracy ?? null,
           sighted_at: now,
-          verification_status: 'unverified',
+          // A naturalist's own record is already expert-checked; everyone
+          // else's goes to the naturalist review list.
+          verification_status: canTeachAi(profile?.role) ? 'verified' : 'unverified',
           ai_confidence: selectedSpecies?.confidence ?? null,
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
           individual_count: count,
           tiger_id: resolvedTigerId,
           park: resolvedPark,
+          ...fieldNotes,
         })
         if (sightingError) throw sightingError
 
@@ -451,6 +465,7 @@ export default function NewSightingPage() {
           // is responsible for registering the named tiger when online.
           tiger_id: null,
           park: resolvedPark,
+          ...fieldNotes,
           media: capturedMedia.map(m => ({
             blob: m.blob,
             type: m.type,
@@ -958,14 +973,18 @@ export default function NewSightingPage() {
                 const cat = (s.category ?? category ?? 'sub').toString().slice(0, 3).toUpperCase()
                 const label = isPrimary ? `${cat} · PRIMARY` : `${cat} · ALT ${String(idx + 1).padStart(2, '0')}`
                 const confPct = Math.round(normalizeConf(s.confidence) * 100)
+                const plate = plateTargetFor(s.common_name, s.scientific_name)
                 return (
+                  <div key={`${s.common_name}-${idx}`} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    borderBottom: `0.5px solid ${DS.inkHair}`,
+                  }}>
                   <button
-                    key={`${s.common_name}-${idx}`}
                     onClick={() => { setSelectedSpecies(s); setLinkedSpeciesId(s.species_id ?? null); setStep('entry') }}
                     style={{
+                      flex: 1, minWidth: 0,
                       textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
                       padding: isPrimary ? '20px 0 22px' : '16px 0 18px',
-                      borderBottom: `0.5px solid ${DS.inkHair}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
                     }}
                   >
@@ -1005,6 +1024,8 @@ export default function NewSightingPage() {
                       <Mono size={9} color={DS.inkSoft} letter={0.18}>{confPct}%</Mono>
                     )}
                   </button>
+                  {plate && <PlateThumb target={plate} size={isPrimary ? 76 : 52} onOpen={setComparePlate} />}
+                  </div>
                 )
               })}
 
@@ -1040,6 +1061,9 @@ export default function NewSightingPage() {
             </div>
           )}
         </div>
+        {comparePlate && (
+          <PlateCompare photoUrl={photoPreviewUrl} target={comparePlate} onClose={() => setComparePlate(null)} />
+        )}
       </div>
     )
   }

@@ -8,12 +8,25 @@ import { formatCoordinates } from '@/hooks/useGeolocation'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono, MonoIcon, CAT_COLOR, ConfidenceDial } from '@/components/logger/shared'
 import { useAuth } from '@/context/AuthContext'
+import { supabase } from '@/lib/supabase'
+import { canTeachAi } from '@/lib/gemini'
 import type { Sighting } from '@/types'
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { sightings, loading, error, fetchSightings, clearSightings } = useSightings()
   const [pendingCount, setPendingCount] = useState(0)
+  const [reviewCount, setReviewCount] = useState(0)
+
+  // Naturalists see how many records (from anyone) are waiting for them.
+  const isNaturalist = canTeachAi(profile?.role)
+  useEffect(() => {
+    if (!isNaturalist || !navigator.onLine) return
+    ;(supabase.from('sightings') as any)
+      .select('id', { count: 'exact', head: true })
+      .in('verification_status', ['unverified', 'ai_suggested'])
+      .then(({ count }: { count: number | null }) => setReviewCount(count ?? 0))
+  }, [isNaturalist, sightings.length])
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -71,6 +84,19 @@ export default function HomePage() {
           Every sighting you've entered, in the order it happened. Tap an entry to read the full record.
         </p>
       </div>
+
+      {reviewCount > 0 && (
+        <Link to="/dashboard?view=review" style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+          padding: '14px 16px', marginBottom: 20, textDecoration: 'none',
+          background: DS.ink, color: DS.ivory,
+        }}>
+          <span style={{ fontFamily: DS.serif, fontSize: 17, fontWeight: 300 }}>
+            {reviewCount} record{reviewCount === 1 ? '' : 's'} waiting for a naturalist
+          </span>
+          <Mono size={10} letter={0.22} color={DS.ochre}>Review →</Mono>
+        </Link>
+      )}
 
       {/* Stat strip */}
       <div style={{

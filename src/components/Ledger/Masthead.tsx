@@ -5,10 +5,10 @@ import { useAuth } from '../../context/AuthContext'
 import { Mono, Rule } from './shared'
 import type { Sighting, TigerIndividual } from '../../types'
 
-export type LedgerView = 'desk' | 'sighting' | 'species' | 'tigers'
+export type LedgerView = 'desk' | 'review' | 'sighting' | 'species' | 'tigers'
 
 export function Masthead({
-  view, onNav, selectedSighting, selectedSpecies, selectedTiger, onSignOut, userInitials,
+  view, onNav, selectedSighting, selectedSpecies, selectedTiger, onSignOut, userInitials, reviewCount,
 }: {
   view: LedgerView
   onNav: (v: LedgerView) => void
@@ -17,12 +17,17 @@ export function Masthead({
   selectedTiger?: TigerIndividual | null
   onSignOut: () => void
   userInitials: string
+  // Number of records waiting for a naturalist; omit to hide the Review tab.
+  reviewCount?: number
 }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
 
   const tabs: { id: LedgerView; label: string }[] = [
     { id: 'desk', label: 'Front Desk' },
+    ...(reviewCount !== undefined
+      ? [{ id: 'review' as const, label: reviewCount > 0 ? `Review · ${reviewCount}` : 'Review' }]
+      : []),
     { id: 'sighting', label: 'Sighting' },
     { id: 'species', label: 'Species' },
     { id: 'tigers', label: 'Tigers' },
@@ -45,6 +50,8 @@ export function Masthead({
   const title =
     view === 'desk'
       ? <>Today's <em style={{ fontStyle: 'italic', fontWeight: 300 }}>gatherings</em>.</>
+      : view === 'review'
+      ? <>For <em style={{ fontStyle: 'italic', fontWeight: 300 }}>review</em>.</>
       : view === 'sighting' && selectedSighting
       ? <>Sighting <em style={{ fontStyle: 'italic', fontWeight: 300 }}>№ {selectedSighting.id.slice(0, 4).toUpperCase()}</em>.</>
       : view === 'sighting'
@@ -59,6 +66,7 @@ export function Masthead({
 
   const subhead =
     view === 'desk' ? '◆ The Head Naturalist\'s Desk'
+    : view === 'review' ? '◆ The naturalist\'s check'
     : view === 'sighting' && selectedSighting ? '◆ A record under review'
     : view === 'sighting' ? '◆ Sightings · in review'
     : view === 'species' && selectedSpecies ? '◆ Species folio'
