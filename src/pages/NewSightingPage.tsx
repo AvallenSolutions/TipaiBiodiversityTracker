@@ -357,9 +357,9 @@ export default function NewSightingPage() {
 
     // Resolve the tiger individual: if the user typed a new name, register
     // it before inserting the sighting so we can link by FK. Existing-tiger
-    // selections (tigerId already set) just pass through. Skipped offline —
-    // the tiger registry isn't cached locally so we can't write to it; the
-    // user falls back to the regular sighting flow without a link.
+    // selections (tigerId already set) just pass through. Skipped offline:
+    // the registry can't be written locally, so the typed name is saved on
+    // the pending sighting and syncPendingSightings registers it later.
     let resolvedTigerId: string | null = tigerId
     const speciesIsTiger = isTigerSighting({
       category, common_name: selectedSpecies?.common_name, scientific_name: selectedSpecies?.scientific_name,
@@ -459,11 +459,10 @@ export default function NewSightingPage() {
           ai_suggestions: aiSuggestions.length > 0 ? aiSuggestions : null,
           ai_confidence: selectedSpecies?.confidence ?? null,
           individual_count: count,
-          // tiger_id stays null offline (registry not cached), but the user
-          // can still type a name in newTigerName which will be attempted on
-          // sync. We persist null + park here; the sync function in offline.ts
-          // is responsible for registering the named tiger when online.
-          tiger_id: null,
+          // An existing tiger picked from the list keeps its id. A newly
+          // typed name is stored as tiger_name and registered on sync.
+          tiger_id: resolvedTigerId,
+          tiger_name: speciesIsTiger && !resolvedTigerId ? (newTigerName.trim() || null) : null,
           park: resolvedPark,
           ...fieldNotes,
           media: capturedMedia.map(m => ({
