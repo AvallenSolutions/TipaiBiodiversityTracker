@@ -133,6 +133,9 @@ export interface PendingSighting {
   ai_confidence: number | null
   individual_count: number | null
   tiger_id: string | null
+  // Name of a new tiger typed while offline. The registry can't be written
+  // offline, so sync registers (or looks up) this name and sets tiger_id.
+  tiger_name?: string | null
   park: Park | null
   media: { blob: Blob; type: MediaType; mime_type: string }[]
   created_at: string

@@ -99,6 +99,24 @@ export async function getCachedSpeciesCount(): Promise<number> {
   return db.count('speciesCache')
 }
 
+// Find or register a tiger by name and return its id. Mirrors createTiger
+// in useTigerIndividuals: insert first, and on a unique-name clash (the
+// tiger already exists, or a previous sync attempt created it) look it up.
+async function resolveTigerId(name: string, userId: string): Promise<string> {
+  const { data, error } = await (supabase.from('tiger_individuals') as any)
+    .insert({ name, created_by: userId })
+    .select('id')
+    .single()
+  if (!error) return data.id as string
+  if (error.code !== '23505') throw error
+  const { data: existing, error: lookupErr } = await (supabase.from('tiger_individuals') as any)
+    .select('id')
+    .ilike('name', name)
+    .single()
+  if (lookupErr) throw lookupErr
+  return existing.id as string
+}
+
 export interface SyncResult {
   attempted: number
   synced: number
@@ -110,10 +128,10 @@ export interface SyncResult {
 // needs_finalization are kept in IndexedDB so the user can confirm the
 // species first via the /pending finalize flow. For each ready record we
 // (1) push the photo blobs to the sighting-media bucket, (2) insert the
-// sighting row, (3) insert the sighting_media rows, then (4) remove the
-// pending record from IndexedDB. Records that fail any step stay in
-// IndexedDB and are reported in the failed list so the caller can display
-// them; sync is safe to re-run.
+// sighting row (registering any tiger named offline first), (3) insert the
+// sighting_media rows, then (4) remove the pending record from IndexedDB.
+// Records that fail any step stay in IndexedDB and are reported in the
+// failed list so the caller can display them; sync is safe to re-run.
 export async function syncPendingSightings(userId: string): Promise<SyncResult> {
   const pending = await getPendingSightings()
   // Only sync sightings that were originally logged by the currently
@@ -140,6 +158,9 @@ export async function syncPendingSightings(userId: string): Promise<SyncResult> 
         mediaRecords.push({ path, type: m.type, mime: m.mime_type, size: m.blob.size })
       }
 
+      const tigerName = p.tiger_name?.trim()
+      const tigerId = p.tiger_id ?? (tigerName ? await resolveTigerId(tigerName, userId) : null)
+
       const { error: sErr } = await (supabase.from('sightings') as any).insert({
         id: p.id,
         user_id: userId,
@@ -156,6 +177,8 @@ export async function syncPendingSightings(userId: string): Promise<SyncResult> 
         ai_confidence: p.ai_confidence,
         ai_suggestions: p.ai_suggestions,
         individual_count: p.individual_count,
+        tiger_id: tigerId,
+        park: p.park ?? null,
       })
       if (sErr) throw sErr
 
