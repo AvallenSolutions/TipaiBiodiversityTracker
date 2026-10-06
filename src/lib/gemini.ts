@@ -3,7 +3,7 @@
 // them, and turns failures into short messages a ranger can act on.
 
 import { supabase } from './supabase'
-import { getMediaUrl } from './storage'
+import { downloadMedia } from './storage'
 import type { AISuggestion, Park, Sighting, SightingCategory, UserRole } from '@/types'
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/identify-species`
@@ -73,9 +73,8 @@ export async function identifySpecies(
  * server reads the species name from the database, never from the client.
  * If the sighting is unnamed or rejected, the server removes the example.
  */
-export async function learnFromSighting(sightingId: string, photo: Blob | string): Promise<boolean> {
-  const blob = typeof photo === 'string' ? await fetchBlob(photo) : photo
-  const thumb = await shrinkImage(blob, EXAMPLE_EDGE, 0.8)
+export async function learnFromSighting(sightingId: string, photo: Blob): Promise<boolean> {
+  const thumb = await shrinkImage(photo, EXAMPLE_EDGE, 0.8)
   const result = await callFunction({ action: 'learn', sighting_id: sightingId, image: await toInline(thumb) }, 60_000)
   return !!result?.learned
 }
@@ -84,7 +83,10 @@ export async function learnFromSighting(sightingId: string, photo: Blob | string
 export async function learnFromSightingRecord(s: Pick<Sighting, 'id' | 'media'>): Promise<boolean> {
   const photo = s.media?.find(m => m.media_type === 'photo')
   if (!photo) return false
-  return learnFromSighting(s.id, getMediaUrl(photo.storage_path))
+  const blob = await downloadMedia(photo.storage_path).catch(() => {
+    throw new AiError('Could not load the sighting photo.', 'photo', true)
+  })
+  return learnFromSighting(s.id, blob)
 }
 
 // ─── Internals ────────────────────────────────────────────────────────
@@ -130,12 +132,6 @@ async function callFunction(body: unknown, timeoutMs: number): Promise<any> {
       res.status >= 500 || res.status === 429,
     )
   }
-}
-
-async function fetchBlob(url: string): Promise<Blob> {
-  const res = await fetch(url)
-  if (!res.ok) throw new AiError('Could not load the sighting photo.', 'photo', true)
-  return res.blob()
 }
 
 async function toInline(blob: Blob): Promise<{ mime_type: string; data: string }> {
