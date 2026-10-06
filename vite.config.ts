@@ -24,6 +24,18 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Publish the plate list so the identify-species edge function can show
+    // the model the field-guide plate for each candidate species.
+    {
+      name: 'species-plate-manifest',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'species-images/manifest.json',
+          source: JSON.stringify(bundledSpeciesImages),
+        })
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png'],

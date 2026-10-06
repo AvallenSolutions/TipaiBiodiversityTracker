@@ -9,7 +9,7 @@ import { useTigerIndividuals, isTigerSighting } from '@/hooks/useTigerIndividual
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
 import { savePendingSighting } from '@/lib/offline'
-import { identifySpecies, isGeminiAvailable } from '@/lib/gemini'
+import { identifySpecies, isAiAvailable, learnFromSighting, canTeachAi } from '@/lib/gemini'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Blank, ConfidenceDial, PickerSheet, Mono, MonoIcon } from '@/components/logger/shared'
 import { PARK_LABEL } from '@/types'
@@ -31,7 +31,7 @@ const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian'
 
 export default function NewSightingPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { location, getLocation, error: locationError, loading: locationLoading, deniedPermanent: locationDenied } = useGeolocation()
   const [skipLocation, setSkipLocation] = useState(false)
 
@@ -259,45 +259,59 @@ export default function NewSightingPage() {
     }
   }, [step, startCamera, stopStream])
 
-  useEffect(() => {
-    if (step === 'identifying') {
-      const photo = capturedMedia[capturedMedia.length - 1]
-      const timer = setTimeout(() => {
-        setAiError(null)
-        // Offline: skip the identify telegram entirely and drop the user
-        // straight into the entry view. They can pick from the cached
-        // library or write the species by hand. The sighting is held on
-        // the device and finalized once signal returns.
-        if (!navigator.onLine) {
-          setStep('entry')
-          return
-        }
-        if (photo?.type === 'photo' && isGeminiAvailable()) {
-          setAiLoading(true)
-          identifySpecies(photo.blob, category)
-            .then(suggestions => {
-              setAiSuggestions(suggestions)
-              // Auto-apply the category from the top suggestion if user didn't pick one
-              const topCat = suggestions[0]?.category as SightingCategory | undefined
-              if (!category && topCat && CATEGORIES.includes(topCat)) setCategory(topCat)
-            })
-            .catch(err => {
-              console.error('[identifySpecies] failed', err)
-              setAiError(err?.message || String(err))
-              setAiSuggestions([])
-            })
-            .finally(() => {
-              setAiLoading(false)
-              setStep('identify')
-            })
-        } else {
-          if (!isGeminiAvailable()) setAiError('VITE_GEMINI_API_KEY not found in env — is it set on Netlify and did you redeploy?')
-          setStep('identify')
-        }
-      }, 800)
-      return () => clearTimeout(timer)
+  // Latest GPS fix for the AI context, read via a ref so a late fix does
+  // not re-trigger identification.
+  const locationRef = useRef(location)
+  useEffect(() => { locationRef.current = location }, [location])
+
+  // Send every photo of this sighting (up to 3) so the AI can use all
+  // angles. Also used by the "Try again" button on the identify step.
+  const runIdentify = useCallback(() => {
+    const photos = capturedMedia.filter(m => m.type === 'photo').slice(-3).map(m => m.blob)
+    if (photos.length === 0 || !isAiAvailable()) {
+      setStep('identify')
+      return
     }
-  }, [step, capturedMedia, category])
+    setAiError(null)
+    setAiLoading(true)
+    const loc = locationRef.current
+    identifySpecies(photos, category, {
+      latitude: loc?.latitude ?? null,
+      longitude: loc?.longitude ?? null,
+      sighted_at: new Date().toISOString(),
+    })
+      .then(suggestions => {
+        setAiSuggestions(suggestions)
+        // Auto-apply the category from the top suggestion if user didn't pick one
+        const topCat = suggestions[0]?.category as SightingCategory | undefined
+        if (!category && topCat && CATEGORIES.includes(topCat)) setCategory(topCat)
+      })
+      .catch(err => {
+        console.error('[identifySpecies] failed', err)
+        setAiError(err?.message || String(err))
+        setAiSuggestions([])
+      })
+      .finally(() => {
+        setAiLoading(false)
+        setStep('identify')
+      })
+  }, [capturedMedia, category])
+
+  useEffect(() => {
+    if (step !== 'identifying') return
+    const timer = setTimeout(() => {
+      // Offline: skip the identify telegram entirely and drop the user
+      // straight into the entry view. They can pick from the cached
+      // library or write the species by hand. The sighting is held on
+      // the device and finalized once signal returns.
+      if (!navigator.onLine) {
+        setStep('entry')
+        return
+      }
+      runIdentify()
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [step, runIdentify])
 
   // Trigger geolocation as soon as the user enters the log flow so the
   // permission dialog and GPS lookup run in parallel with the photo
@@ -401,6 +415,14 @@ export default function NewSightingPage() {
             }))
           )
           if (mediaError) throw mediaError
+        }
+
+        // A naturalist or admin confirming a species teaches the AI. Runs
+        // in the background; a failure here never blocks the sighting.
+        const firstPhoto = capturedMedia.find(m => m.type === 'photo')
+        if (canTeachAi(profile?.role) && selectedSpecies?.common_name && firstPhoto) {
+          learnFromSighting(sightingId, firstPhoto.blob)
+            .catch(err => console.warn('[learn] could not teach AI from sighting', err))
         }
       } else {
         // Sightings logged offline without a species pick are flagged for
@@ -699,7 +721,7 @@ export default function NewSightingPage() {
   // ─── Step: Choose (AI vs Manual) ───────────────────────────────────
 
   if (step === 'choose') {
-    const aiAvailable = isOnline && isGeminiAvailable()
+    const aiAvailable = isOnline && isAiAvailable()
     return (
       <div style={{
         position: 'fixed', inset: 0, zIndex: 100, background: DS.ivory,
@@ -903,12 +925,31 @@ export default function NewSightingPage() {
               <Mono size={9} color={DS.rust} letter={0.15} style={{ lineHeight: 1.6, wordBreak: 'break-word' }}>
                 AI unavailable: {aiError}
               </Mono>
+              {isOnline && !aiLoading && (
+                <button onClick={runIdentify} style={{
+                  marginTop: 10, background: DS.ink, color: DS.ivory, border: 'none',
+                  padding: '10px 14px', cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+                }}>Try again</button>
+              )}
+            </div>
+          )}
+
+          {!aiLoading && aiSuggestions.find(s => s.warning) && (
+            <div style={{
+              margin: '12px 0 0', padding: '10px 12px',
+              background: DS.rust, color: DS.ivory,
+            }}>
+              <Mono size={9} color={DS.ivory} letter={0.18} style={{ marginBottom: 4 }}>⚠ Safety · possible venomous look-alike</Mono>
+              <div style={{ fontFamily: DS.serif, fontSize: 14, lineHeight: 1.45 }}>
+                {aiSuggestions.find(s => s.warning)!.warning}
+              </div>
             </div>
           )}
 
           {aiLoading ? (
             <div style={{ padding: '40px 0', textAlign: 'center' }}>
-              <Mono size={10} color={DS.inkFaint} letter={0.22}>⋯ Analyzing</Mono>
+              <Mono size={10} color={DS.inkFaint} letter={0.22}>⋯ Comparing with the field guide</Mono>
             </div>
           ) : aiSuggestions.length > 0 ? (
             <>
@@ -920,7 +961,7 @@ export default function NewSightingPage() {
                 return (
                   <button
                     key={`${s.common_name}-${idx}`}
-                    onClick={() => { setSelectedSpecies(s); setStep('entry') }}
+                    onClick={() => { setSelectedSpecies(s); setLinkedSpeciesId(s.species_id ?? null); setStep('entry') }}
                     style={{
                       textAlign: 'left', background: 'transparent', border: 'none', cursor: 'pointer',
                       padding: isPrimary ? '20px 0 22px' : '16px 0 18px',
@@ -944,6 +985,21 @@ export default function NewSightingPage() {
                           fontStyle: 'italic', fontWeight: 300, color: DS.inkSoft, marginTop: 4,
                         }}>{s.scientific_name}</div>
                       )}
+                      {isPrimary && !!s.field_marks?.length && (
+                        <div style={{
+                          fontFamily: DS.serif, fontSize: 13, fontWeight: 300,
+                          color: DS.inkSoft, marginTop: 8, lineHeight: 1.45,
+                        }}>Seen: {s.field_marks.join(' · ')}</div>
+                      )}
+                      {isPrimary && !!s.missing_marks?.length && (
+                        <div style={{
+                          fontFamily: DS.serif, fontSize: 13, fontWeight: 300, fontStyle: 'italic',
+                          color: DS.inkSoft, marginTop: 4, lineHeight: 1.45,
+                        }}>Not visible: {s.missing_marks.join(' · ')}</div>
+                      )}
+                      {s.in_library === false && (
+                        <Mono size={8} letter={0.18} color={DS.ochre} style={{ marginTop: 6 }}>Not in the species library</Mono>
+                      )}
                     </div>
                     {!isPrimary && confPct > 0 && (
                       <Mono size={9} color={DS.inkSoft} letter={0.18}>{confPct}%</Mono>
@@ -952,7 +1008,7 @@ export default function NewSightingPage() {
                 )
               })}
 
-              <button onClick={() => { setSelectedSpecies(null); setStep('entry'); }} style={{
+              <button onClick={() => { setSelectedSpecies(null); setLinkedSpeciesId(null); setStep('entry'); }} style={{
                 background: 'transparent', border: 'none', padding: '16px 0 24px',
                 borderTop: `0.5px solid ${DS.ink}`, cursor: 'pointer', textAlign: 'center',
                 fontFamily: DS.mono, fontSize: 10, letterSpacing: '0.22em',

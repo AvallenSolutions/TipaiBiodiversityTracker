@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useGeolocation } from '@/hooks/useGeolocation'
 import { supabase } from '@/lib/supabase'
 import { uploadMedia } from '@/lib/storage'
-import { identifySpecies, isGeminiAvailable } from '@/lib/gemini'
+import { identifySpecies, isAiAvailable, learnFromSighting, canTeachAi } from '@/lib/gemini'
 import { extractExif } from '@/lib/exif'
 import { DS, normalizeConf } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
@@ -23,6 +23,8 @@ interface UploadItem {
   cameraModel: string | null
   aiSuggestions: AISuggestion[]
   aiConfidence: number | null
+  // Library link from the AI pick. Cleared when the name is edited by hand.
+  speciesId: string | null
   // Editable
   commonName: string
   scientificName: string
@@ -35,10 +37,13 @@ interface UploadItem {
 
 const CATEGORIES: SightingCategory[] = ['mammal', 'bird', 'reptile', 'amphibian', 'insect', 'plant', 'fungi', 'trace']
 const PROCESS_CONCURRENCY = 3
+// Each identification is two model passes plus reference images, so keep
+// fewer in flight than uploads to stay clear of rate limits.
+const AI_CONCURRENCY = 2
 
 export default function BulkUploadPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { location, getLocation } = useGeolocation()
 
   const [items, setItems] = useState<UploadItem[]>([])
@@ -81,14 +86,20 @@ export default function BulkUploadPage() {
   const processItem = useCallback(async (item: UploadItem) => {
     updateItem(item.id, { status: 'identifying' })
     try {
-      const suggestions = isGeminiAvailable()
-        ? await identifySpecies(item.file, null)
+      const suggestions = isAiAvailable()
+        ? await identifySpecies(item.file, null, {
+            latitude: item.exifLat,
+            longitude: item.exifLng,
+            sighted_at: item.takenAt?.toISOString() ?? null,
+          })
         : []
       const top = suggestions[0]
       updateItem(item.id, {
         status: 'ready',
+        errorMsg: null,
         aiSuggestions: suggestions,
         aiConfidence: top?.confidence ?? null,
+        speciesId: top?.species_id ?? null,
         commonName: top?.common_name || '',
         scientificName: top?.scientific_name || '',
         category: (top?.category as SightingCategory) || item.category,
@@ -106,7 +117,7 @@ export default function BulkUploadPage() {
   useEffect(() => {
     const queued = items.filter(i => i.status === 'queued')
     const inFlight = items.filter(i => i.status === 'identifying').length
-    const slots = Math.max(0, PROCESS_CONCURRENCY - inFlight)
+    const slots = Math.max(0, AI_CONCURRENCY - inFlight)
     if (queued.length === 0 || slots === 0) return
     queued.slice(0, slots).forEach(processItem)
   }, [items, processItem])
@@ -126,6 +137,7 @@ export default function BulkUploadPage() {
         cameraModel: exif.cameraModel,
         aiSuggestions: [],
         aiConfidence: null,
+        speciesId: null,
         commonName: '',
         scientificName: '',
         category: 'mammal',
@@ -183,7 +195,7 @@ export default function BulkUploadPage() {
       const { error: sightingErr } = await (supabase.from('sightings') as any).insert({
         id: sightingId,
         user_id: user.id,
-        species_id: null,
+        species_id: item.speciesId,
         category: item.category,
         common_name: item.commonName.trim() || null,
         scientific_name: item.scientificName.trim() || null,
@@ -208,6 +220,12 @@ export default function BulkUploadPage() {
         size_bytes: item.file.size,
       })
       if (mediaErr) throw mediaErr
+
+      // Naturalist/admin uploads teach the AI (background, never blocking).
+      if (canTeachAi(profile?.role) && item.commonName.trim()) {
+        learnFromSighting(sightingId, item.file)
+          .catch(err => console.warn('[learn] could not teach AI from upload', err))
+      }
 
       updateItem(item.id, { status: 'saved' })
       return true
@@ -469,7 +487,7 @@ function UploadRow({
 
         <input
           value={item.commonName}
-          onChange={e => onChange({ commonName: e.target.value })}
+          onChange={e => onChange({ commonName: e.target.value, speciesId: null })}
           placeholder={item.status === 'identifying' ? 'Identifying…' : 'Common name'}
           disabled={isBusy}
           style={rowInputBig}
@@ -477,7 +495,7 @@ function UploadRow({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 6 }}>
           <input
             value={item.scientificName}
-            onChange={e => onChange({ scientificName: e.target.value })}
+            onChange={e => onChange({ scientificName: e.target.value, speciesId: null })}
             placeholder="Scientific name"
             disabled={isBusy}
             style={rowInputItalic}
@@ -505,8 +523,26 @@ function UploadRow({
           </Mono>
         </div>
 
+        {item.aiSuggestions[0]?.warning && (
+          <Mono size={9} color={DS.rust} letter={0.12} style={{ lineHeight: 1.5 }}>
+            ⚠ {item.aiSuggestions[0].warning}
+          </Mono>
+        )}
+
         {item.errorMsg && (
-          <Mono size={9} color={DS.rust} letter={0.15}>{item.errorMsg}</Mono>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Mono size={9} color={DS.rust} letter={0.15}>{item.errorMsg}</Mono>
+            {item.status === 'ready' && (
+              <button
+                onClick={() => onChange({ status: 'queued', errorMsg: null })}
+                style={{
+                  background: 'transparent', border: `0.5px solid ${DS.rust}`, cursor: 'pointer',
+                  fontFamily: DS.mono, fontSize: 9, letterSpacing: '0.18em',
+                  color: DS.rust, textTransform: 'uppercase', padding: '3px 8px',
+                }}
+              >Retry AI</button>
+            )}
+          </div>
         )}
       </div>
     </div>
