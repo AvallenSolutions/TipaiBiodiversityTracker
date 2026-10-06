@@ -109,6 +109,15 @@ export interface AISuggestion {
   confidence: number
   description: string | null
   category?: SightingCategory
+  // Added by the v2 identifier (identify-species edge function). Older
+  // stored suggestions do not have these fields.
+  species_id?: string | null
+  in_library?: boolean
+  field_marks?: string[]
+  missing_marks?: string[]
+  venomous?: boolean
+  warning?: string | null
+  engine?: string
 }
 
 export interface LocationData {

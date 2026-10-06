@@ -30,3 +30,6 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# Supabase CLI scratch files
+supabase/.temp/

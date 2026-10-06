@@ -3,6 +3,8 @@ import { format } from 'date-fns'
 import { DS, normalizeConf, getFlag, catLetter } from '../../lib/ledger-design'
 import { getMediaUrl } from '../../lib/storage'
 import { useSightings } from '../../hooks/useSightings'
+import { useAuth } from '../../context/AuthContext'
+import { canTeachAi, learnFromSightingRecord } from '../../lib/gemini'
 import type { Sighting, SightingCategory, VerificationStatus } from '../../types'
 import { Mono, CatDot, ConfPill, FlagTag } from './shared'
 
@@ -40,6 +42,7 @@ export function SightingsListView({
   const [actionError, setActionError] = useState<string | null>(null)
 
   const { verifySighting } = useSightings()
+  const { profile } = useAuth()
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -77,6 +80,10 @@ export function SightingsListView({
     setVerifyingId(s.id)
     try {
       await verifySighting(s.id)
+      // A naturalist/admin verification teaches the AI (background only).
+      if (canTeachAi(profile?.role)) {
+        learnFromSightingRecord(s).catch(err => console.warn('[learn] could not teach AI from sighting', err))
+      }
       onChanged()
     } catch (err: any) {
       setActionError(err?.message || 'Failed to verify sighting')
