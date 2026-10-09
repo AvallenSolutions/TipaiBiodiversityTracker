@@ -23,7 +23,8 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { decodeBase64, encodeBase64 } from 'jsr:@std/encoding@1/base64'
 import { buildPlateIndex, findPlate } from '../_shared/speciesPlates.ts'
 
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
+// Trim stray spaces, newlines or quotes left over from pasting the key.
+const GEMINI_API_KEY = (Deno.env.get('GEMINI_API_KEY') ?? '').trim().replace(/^['"]|['"]$/g, '')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -127,7 +128,7 @@ async function generate(body: unknown, deadline: number, first = PRIMARY_MODEL):
           },
         )
         if (res.ok) return { data: await res.json(), model }
-        const text = (await res.text().catch(() => '')).slice(0, 300)
+        const text = (await res.text().catch(() => '')).slice(0, 1000)
         lastErr = new GeminiError(res.status, text)
         console.warn(`[gemini] ${model} attempt ${attempt + 1} -> ${res.status} ${text}`)
         if (res.status === 404) break             // model retired: go to the fallback
@@ -171,13 +172,14 @@ async function embedImage(img: InlineImage): Promise<number[] | null> {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
         body: JSON.stringify({
           content: { parts: [inline(img)] },
-          embedContentConfig: { outputDimensionality: EMBED_DIMS },
+          // REST takes this at the top level (embedContentConfig is the JS SDK name).
+          output_dimensionality: EMBED_DIMS,
         }),
         signal: AbortSignal.timeout(20_000),
       },
     )
     if (!res.ok) {
-      console.warn('[embed] failed', res.status, (await res.text().catch(() => '')).slice(0, 300))
+      console.warn('[embed] failed', res.status, (await res.text().catch(() => '')).slice(0, 1000))
       return null
     }
     const data = await res.json()

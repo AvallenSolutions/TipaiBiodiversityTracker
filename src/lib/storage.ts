@@ -49,6 +49,15 @@ export async function uploadSpeciesImage(
   return { path, url: data.publicUrl }
 }
 
+// Download a stored file as a Blob. Uses the authenticated object
+// endpoint, not the public URL, because the service worker caches public
+// URLs as opaque responses (from <img> tags) and fetch() cannot read those.
+export async function downloadMedia(path: string): Promise<Blob> {
+  const { data, error } = await supabase.storage.from(BUCKET).download(path)
+  if (error || !data) throw error ?? new Error('Could not load the photo.')
+  return data
+}
+
 export function getMediaUrl(path: string): string {
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return data.publicUrl

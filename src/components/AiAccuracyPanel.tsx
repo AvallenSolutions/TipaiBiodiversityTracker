@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getMediaUrl } from '@/lib/storage'
+import { downloadMedia } from '@/lib/storage'
 import { identifySpecies, learnFromSightingRecord } from '@/lib/gemini'
 import { DS } from '@/lib/ledger-design'
 import { Mono } from '@/components/logger/shared'
@@ -108,7 +108,7 @@ export function AiAccuracyPanel() {
       for (const r of records) {
         const photo = r.media!.find(m => m.media_type === 'photo')!
         try {
-          const blob = await fetch(getMediaUrl(photo.storage_path)).then(res => res.blob())
+          const blob = await downloadMedia(photo.storage_path)
           // Category left blank on purpose: the harder, more honest test.
           const suggestions = await identifySpecies(blob, null, {
             latitude: r.latitude, longitude: r.longitude, park: r.park,
