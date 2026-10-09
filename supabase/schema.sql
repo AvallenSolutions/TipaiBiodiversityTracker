@@ -82,8 +82,8 @@ CREATE TABLE IF NOT EXISTS public.sightings (
   common_name TEXT,
   scientific_name TEXT,
   notes TEXT,
-  latitude DOUBLE PRECISION NOT NULL,
-  longitude DOUBLE PRECISION NOT NULL,
+  latitude DOUBLE PRECISION,           -- null when logged by park (no GPS)
+  longitude DOUBLE PRECISION,
   location_accuracy DOUBLE PRECISION,
   sighted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   verification_status verification_status NOT NULL DEFAULT 'unverified',
